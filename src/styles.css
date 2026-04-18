@@ -114,7 +114,7 @@ img {
 
 .phone-screen--login {
   background: #fff;
-  overflow: hidden;
+  overflow: visible;
   min-height: min(calc(100dvh - 40px), var(--screen-height));
 }
 
@@ -1814,8 +1814,9 @@ img {
   }
 
   .phone-screen--login {
-    min-height: 100svh;
-    height: 100svh;
+    min-height: 100dvh;
+    height: 100dvh;
+    overflow: visible;
   }
 
   .bottom-tab {
