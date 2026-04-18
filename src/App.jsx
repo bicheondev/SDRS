@@ -1,5 +1,5 @@
 import { startTransition, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 
 import {
   applyImagesToShipRecords,
@@ -25,26 +25,57 @@ import {
   mergeImportedShipRecords,
   normalizeShipCardsForStorage,
 } from './appDomain';
-import { getMotionCssVariables, getPressMotion } from './motion';
-import { vesselTypeOptions } from './uiAssets';
+import { getMotionCssVariables } from './motion';
+import { assets, vesselTypeOptions } from './uiAssets';
 import AnimatedScreen from './components/AnimatedScreen';
 import BottomTab from './components/BottomTab';
 import {
-  CompactVesselCard,
+  applySearchQuery,
   FilterScreen,
-  SearchScreen,
+  SearchTopBar,
   TopBar,
-  VesselCard,
-  VesselEmptyState,
+  VesselResults,
 } from './components/DatabaseScreens';
 import ImageZoomModal from './components/ImageZoomModal';
 import { DataManagementHomeScreen, DataManagementShipEditScreen } from './components/ManageScreens';
 import { MenuInfoScreen, MenuModeScreen, MenuScreen } from './components/MenuScreens';
+import { useRouteNavigation, useStackNavigation } from './navigation';
+
+const tabAssetSources = [
+  assets.tabDb,
+  assets.tabDbCompact,
+  assets.tabManage,
+  assets.tabManageCompact,
+  assets.tabMenu,
+  assets.tabMenuCompact,
+  assets.tabDbInactive,
+  assets.tabManageInactive,
+  assets.tabMenuActive,
+  assets.manageTabDb,
+  assets.manageTabActive,
+  assets.manageTabMenu,
+];
+
+const TAB_ORDER = ['db', 'manage', 'menu'];
+
+function getTabTransition(currentTab, nextTab) {
+  const currentIndex = TAB_ORDER.indexOf(currentTab);
+  const nextIndex = TAB_ORDER.indexOf(nextTab);
+
+  if (currentIndex === -1 || nextIndex === -1 || currentIndex === nextIndex) {
+    return 'none';
+  }
+
+  return nextIndex > currentIndex ? 'tabForward' : 'tabBackward';
+}
 
 function App() {
   const reducedMotion = useReducedMotion() ?? false;
-  const [screen, setScreen] = useState('login');
-  const [navDir, setNavDir] = useState('none');
+  const authNavigation = useRouteNavigation('login');
+  const manageNavigation = useStackNavigation('manageHome');
+  const menuNavigation = useStackNavigation('menu');
+  const [activeTab, setActiveTab] = useState('db');
+  const [tabTransition, setTabTransition] = useState('none');
   const [compact, setCompact] = useState(false);
   const [colorMode, setColorMode] = useState('light');
   const [systemColorMode, setSystemColorMode] = useState(() => {
@@ -65,12 +96,12 @@ function App() {
   const [pendingShipImport, setPendingShipImport] = useState(null);
   const [manageSaveToast, setManageSaveToast] = useState(null);
   const [topBarHidden, setTopBarHidden] = useState(false);
+  const [databaseView, setDatabaseView] = useState('browse');
   const [searchQuery, setSearchQuery] = useState('');
   const [zoomSession, setZoomSession] = useState(null);
   const [harborFilter, setHarborFilter] = useState('전체 항포구');
   const [vesselTypeFilter, setVesselTypeFilter] = useState('전체 선박');
-  const [filterMode, setFilterMode] = useState('harbor');
-  const [filterOrigin, setFilterOrigin] = useState('main');
+  const [filterSheet, setFilterSheet] = useState(null);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [focusedField, setFocusedField] = useState('');
@@ -88,25 +119,24 @@ function App() {
     () => filterVessels(displayVessels, harborFilter, vesselTypeFilter),
     [displayVessels, harborFilter, vesselTypeFilter],
   );
+  const searchedDisplayVessels = useMemo(
+    () => applySearchQuery(filteredDisplayVessels, searchQuery),
+    [filteredDisplayVessels, searchQuery],
+  );
   const harborOptions = useMemo(() => buildHarborOptions(databaseState.shipRecords), [databaseState.shipRecords]);
   const manageHomePrimaryRows = useMemo(() => buildManageHomeRows(databaseState.files), [databaseState.files]);
   const resolvedColorMode = colorMode === 'system' ? systemColorMode : colorMode;
-
   const isFilled = username.trim() !== '' && password.trim() !== '';
 
-  const navigate = (to, dir, options = {}) => {
-    const { deferred = false } = options;
-    const commitNavigation = () => {
-      setNavDir(dir);
-      setScreen(to);
-    };
-
-    if (deferred) {
-      startTransition(commitNavigation);
+  const navigateTab = (nextTab) => {
+    if (activeTab === nextTab) {
       return;
     }
 
-    commitNavigation();
+    startTransition(() => {
+      setTabTransition(getTabTransition(activeTab, nextTab));
+      setActiveTab(nextTab);
+    });
   };
 
   const handleCompactChange = (nextCompact) => {
@@ -156,6 +186,25 @@ function App() {
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = '';
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.Image !== 'function') {
+      return undefined;
+    }
+
+    const preloadedImages = tabAssetSources.map((src) => {
+      const image = new window.Image();
+      image.decoding = 'async';
+      image.src = src;
+      return image;
+    });
+
+    return () => {
+      preloadedImages.forEach((image) => {
+        image.src = '';
+      });
     };
   }, []);
 
@@ -211,7 +260,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (screen !== 'login') {
+    if (authNavigation.screen !== 'login') {
       setLoginKeyboardOpen(false);
       setLoginViewportTop(0);
       setLoginViewportHeight(0);
@@ -251,7 +300,7 @@ function App() {
       viewport.removeEventListener('resize', updateKeyboardState);
       viewport.removeEventListener('scroll', updateKeyboardState);
     };
-  }, [focusedField, screen]);
+  }, [authNavigation.screen, focusedField]);
 
   useEffect(() => {
     if (!databaseReady) {
@@ -274,14 +323,18 @@ function App() {
   }, [manageShipCardsState, manageShipSavedState]);
 
   useLayoutEffect(() => {
-    if (screen !== 'main' || !mainContentRef.current) {
+    if (authNavigation.screen !== 'app' || activeTab !== 'db' || databaseView !== 'browse' || !mainContentRef.current) {
       return;
     }
 
     mainContentRef.current.scrollTop = mainScrollPositionRef.current;
-  }, [screen]);
+  }, [activeTab, authNavigation.screen, databaseView]);
 
   const handleMainScroll = (event) => {
+    if (activeTab !== 'db' || databaseView !== 'browse') {
+      return;
+    }
+
     const currentScrollTop = event.currentTarget.scrollTop;
     const lastScrollTop = lastScrollTopRef.current;
 
@@ -306,22 +359,34 @@ function App() {
 
   const openSearch = () => {
     setTopBarHidden(false);
-    navigate('search', 'push', { deferred: true });
+    setFilterSheet(null);
+    startTransition(() => {
+      setDatabaseView('search');
+    });
   };
 
   const openFilter = (mode) => {
     setTopBarHidden(false);
-    setFilterMode(mode);
-    setFilterOrigin(screen === 'search' ? 'search' : 'main');
-    navigate('filter', 'sheet', { deferred: true });
+    setFilterSheet({
+      mode,
+      sourceView: databaseView,
+    });
   };
 
   const closeFilter = () => {
-    navigate(filterOrigin, 'sheetBack');
+    setFilterSheet(null);
+  };
+
+  const closeSearch = () => {
+    setTopBarHidden(false);
+    setFilterSheet(null);
+    startTransition(() => {
+      setDatabaseView('browse');
+    });
   };
 
   const handleFilterSearchOpen = () => {
-    if (filterOrigin === 'search') {
+    if (filterSheet?.sourceView === 'search') {
       closeFilter();
       return;
     }
@@ -331,7 +396,10 @@ function App() {
 
   const openMenu = () => {
     setTopBarHidden(false);
-    navigate('menu', 'tab');
+    setFilterSheet(null);
+    setDatabaseView('browse');
+    menuNavigation.reset('menu');
+    navigateTab('menu');
   };
 
   const syncShipEditor = (shipRecords) => {
@@ -385,14 +453,24 @@ function App() {
     }, 2200);
   };
 
+  const showDatabaseHome = () => {
+    setTopBarHidden(false);
+    setFilterSheet(null);
+    setDatabaseView('browse');
+    navigateTab('db');
+  };
+
   const openManage = () => {
     setTopBarHidden(false);
+    setFilterSheet(null);
+    setDatabaseView('browse');
     resetManageShip();
     setManageDiscardTarget(null);
     setManageImportAlert(null);
     setPendingShipImport(null);
     hideManageSaveToast();
-    navigate('manageHome', 'tab');
+    manageNavigation.reset('manageHome');
+    navigateTab('manage');
   };
 
   const handleManageShipFieldChange = (cardId, field, value) => {
@@ -458,6 +536,11 @@ function App() {
       );
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleManageShipReorder = (nextCards) => {
+    hideManageSaveToast();
+    setManageShipCardsState(nextCards.map((card) => ({ ...card })));
   };
 
   const handleManageShipSave = () => {
@@ -582,6 +665,36 @@ function App() {
     downloadBlob(exportBlob, 'db_export.zip');
   };
 
+  const showBottomTab =
+    activeTab === 'db' ||
+    (activeTab === 'manage' && manageNavigation.currentScreen === 'manageHome') ||
+    (activeTab === 'menu' && menuNavigation.currentScreen === 'menu');
+  const bottomTabCompact = activeTab === 'manage' ? false : compact;
+  const handleBottomTabDbClick = () => {
+    if (activeTab === 'manage' && manageNavigation.currentScreen === 'manageHome') {
+      setPendingShipImport(null);
+    }
+
+    if (activeTab === 'db' && databaseView === 'search') {
+      closeSearch();
+      return;
+    }
+
+    showDatabaseHome();
+  };
+  const handleBottomTabManageClick = activeTab === 'manage' ? undefined : openManage;
+  const handleBottomTabMenuClick = () => {
+    if (activeTab === 'manage' && manageNavigation.currentScreen === 'manageHome') {
+      setPendingShipImport(null);
+    }
+
+    if (activeTab === 'menu') {
+      return;
+    }
+
+    openMenu();
+  };
+
   const openImageZoom = (vessel, collection = [vessel]) => {
     const vessels = Array.isArray(collection) && collection.length > 0 ? collection.slice() : [vessel];
     const startIndex = Math.max(
@@ -620,12 +733,23 @@ function App() {
     mainScrollPositionRef.current = 0;
     lastScrollTopRef.current = 0;
     setTopBarHidden(false);
-    navigate('main', 'loginToMain');
+    setFilterSheet(null);
+    setDatabaseView('browse');
+    setTabTransition('none');
+    setActiveTab('db');
+    manageNavigation.reset('manageHome');
+    menuNavigation.reset('menu');
+    authNavigation.navigate('app', 'loginToMain');
   };
 
   return (
     <div className="screen-stack" style={getMotionCssVariables(reducedMotion)}>
-      <AnimatedScreen screenKey="login" currentScreen={screen} navDir={navDir} reducedMotion={reducedMotion}>
+      <AnimatedScreen
+        screenKey="login"
+        currentScreen={authNavigation.screen}
+        navDir={authNavigation.transition}
+        reducedMotion={reducedMotion}
+      >
         <main className="app-shell app-shell--login">
           <section
             className={`phone-screen phone-screen--login ${loginKeyboardOpen ? 'phone-screen--login-keyboard-open' : ''}`.trim()}
@@ -678,7 +802,6 @@ function App() {
               type="button"
               disabled={!isFilled || !databaseReady}
               onClick={enterMainScreen}
-              {...getPressMotion('button', { enabled: isFilled })}
             >
               {databaseReady ? '로그인' : '기본 데이터 불러오는 중...'}
             </motion.button>
@@ -686,183 +809,231 @@ function App() {
         </main>
       </AnimatedScreen>
 
-      <AnimatedScreen screenKey="main" currentScreen={screen} navDir={navDir} reducedMotion={reducedMotion}>
-        <main className="app-shell">
-          <section className="phone-screen phone-screen--main">
-            <TopBar
-              compact={compact}
-              harborFilter={harborFilter}
-              harborLabelWidth={0}
-              hidden={topBarHidden}
-              onHarborFilterOpen={() => openFilter('harbor')}
-              onSearchOpen={openSearch}
-              onToggleCompact={handleCompactChange}
-              onVesselTypeFilterOpen={() => openFilter('vesselType')}
-              vesselTypeLabelWidth={0}
-              vesselTypeFilter={vesselTypeFilter}
-            />
+      <AnimatedScreen
+        screenKey="app"
+        currentScreen={authNavigation.screen}
+        navDir={authNavigation.transition}
+        reducedMotion={reducedMotion}
+      >
+        <div className="tab-stack">
+          <AnimatedScreen
+            fillMode="absolute"
+            screenKey="db"
+            currentScreen={activeTab}
+            navDir={tabTransition}
+            reducedMotion={reducedMotion}
+          >
+            <main className="app-shell">
+              <section className={`phone-screen ${databaseView === 'search' ? 'phone-screen--search' : 'phone-screen--main'}`}>
+                {databaseView === 'search' ? (
+                  <SearchTopBar
+                    compact={compact}
+                    harborFilter={harborFilter}
+                    query={searchQuery}
+                    vesselTypeFilter={vesselTypeFilter}
+                    onBack={closeSearch}
+                    onClear={() => setSearchQuery('')}
+                    onHarborFilterOpen={() => openFilter('harbor')}
+                    onQueryChange={setSearchQuery}
+                    onToggleCompact={handleCompactChange}
+                    onVesselTypeFilterOpen={() => openFilter('vesselType')}
+                  />
+                ) : (
+                  <TopBar
+                    compact={compact}
+                    harborFilter={harborFilter}
+                    harborLabelWidth={0}
+                    hidden={topBarHidden}
+                    onHarborFilterOpen={() => openFilter('harbor')}
+                    onSearchOpen={openSearch}
+                    onToggleCompact={handleCompactChange}
+                    onVesselTypeFilterOpen={() => openFilter('vesselType')}
+                    vesselTypeLabelWidth={0}
+                    vesselTypeFilter={vesselTypeFilter}
+                  />
+                )}
 
-            <div className="main-content" ref={mainContentRef} onScroll={handleMainScroll}>
-              {filteredDisplayVessels.length === 0 ? (
-                <VesselEmptyState />
-              ) : compact ? (
-                filteredDisplayVessels.map((vessel, index) => (
-                  <div key={vessel.id}>
-                    <CompactVesselCard
-                      vessel={vessel}
-                      onImageClick={(selectedVessel) => openImageZoom(selectedVessel, filteredDisplayVessels)}
-                    />
-                    {index < filteredDisplayVessels.length - 1 ? <div className="section-divider" /> : null}
-                  </div>
-                ))
-              ) : (
-                filteredDisplayVessels.map((vessel, index) => (
-                  <div key={vessel.id}>
-                    <VesselCard
-                      vessel={vessel}
-                      onImageClick={(selectedVessel) => openImageZoom(selectedVessel, filteredDisplayVessels)}
-                    />
-                    {index < filteredDisplayVessels.length - 1 ? <div className="section-divider" /> : null}
-                  </div>
-                ))
-              )}
+                <VesselResults
+                  className={`main-content ${databaseView === 'search' ? 'main-content--search' : ''}`.trim()}
+                  compact={compact}
+                  onImageClick={openImageZoom}
+                  onScroll={databaseView === 'browse' ? handleMainScroll : undefined}
+                  ref={databaseView === 'browse' ? mainContentRef : undefined}
+                  vessels={databaseView === 'search' ? searchedDisplayVessels : filteredDisplayVessels}
+                />
+              </section>
+
+              <AnimatePresence>
+                {filterSheet ? (
+                  <FilterScreen
+                    compact={compact}
+                    filterMode={filterSheet.mode}
+                    harborFilter={harborFilter}
+                    harborOptions={harborOptions}
+                    query={filterSheet.sourceView === 'search' ? searchQuery : ''}
+                    vessels={displayVessels}
+                    onClose={closeFilter}
+                    onHarborSelect={setHarborFilter}
+                    onImageClick={openImageZoom}
+                    onManageOpen={openManage}
+                    onMenuOpen={openMenu}
+                    onSearchOpen={handleFilterSearchOpen}
+                    onToggleCompact={handleCompactChange}
+                    onVesselTypeSelect={setVesselTypeFilter}
+                    vesselTypeOptions={vesselTypeOptions}
+                    vesselTypeFilter={vesselTypeFilter}
+                  />
+                ) : null}
+              </AnimatePresence>
+            </main>
+          </AnimatedScreen>
+
+          <AnimatedScreen
+            fillMode="absolute"
+            screenKey="manage"
+            currentScreen={activeTab}
+            navDir={tabTransition}
+            reducedMotion={reducedMotion}
+          >
+            <div className="tab-stack">
+              <AnimatedScreen
+                fillMode="absolute"
+                screenKey="manageHome"
+                currentScreen={manageNavigation.currentScreen}
+                navDir={manageNavigation.transition}
+                reducedMotion={reducedMotion}
+              >
+                <DataManagementHomeScreen
+                  importAlert={manageImportAlert}
+                  pendingShipImport={pendingShipImport}
+                  onExport={handleExportDatabase}
+                  onImportAlertDismiss={() => setManageImportAlert(null)}
+                  onImagesImport={handleImagesImport}
+                  onPendingShipImportDismiss={() => setPendingShipImport(null)}
+                  onPendingShipImportKeepExisting={() => applyPendingShipImport({ keepExisting: true })}
+                  onPendingShipImportReplaceAll={() => applyPendingShipImport({ keepExisting: false })}
+                  onPendingShipImportReplaceSameRegistrationChange={(checked) =>
+                    setPendingShipImport((current) => (current ? { ...current, replaceSameRegistration: checked } : current))
+                  }
+                  onShipEditOpen={() => manageNavigation.push('manageShipEdit')}
+                  onShipImport={handleShipImport}
+                  rows={manageHomePrimaryRows}
+                />
+              </AnimatedScreen>
+
+              <AnimatedScreen
+                fillMode="absolute"
+                screenKey="manageShipEdit"
+                currentScreen={manageNavigation.currentScreen}
+                navDir={manageNavigation.transition}
+                reducedMotion={reducedMotion}
+              >
+                <DataManagementShipEditScreen
+                  cards={manageShipCardsState}
+                  dirty={manageShipDirty}
+                  onDismissToast={hideManageSaveToast}
+                  originalCards={manageShipSavedState}
+                  onAdd={handleManageShipAdd}
+                  onBack={() => {
+                    if (manageShipDirty) {
+                      setManageDiscardTarget('ship');
+                      return;
+                    }
+
+                    manageNavigation.pop();
+                  }}
+                  onConfirmDiscard={() => {
+                    setManageDiscardTarget(null);
+                    restoreManageShipSaved();
+                    manageNavigation.pop();
+                  }}
+                  onDelete={handleManageShipDelete}
+                onDismissDiscard={() => setManageDiscardTarget(null)}
+                onFieldChange={handleManageShipFieldChange}
+                onImageChange={handleManageShipImageChange}
+                onReorder={handleManageShipReorder}
+                onSave={handleManageShipSave}
+                onSearchChange={setManageShipSearch}
+                onSearchClear={() => setManageShipSearch('')}
+                  searchQuery={manageShipSearch}
+                  showDiscardModal={manageDiscardTarget === 'ship'}
+                  toast={manageSaveToast}
+                />
+              </AnimatedScreen>
             </div>
+          </AnimatedScreen>
 
-            <BottomTab activeTab="db" compact={compact} onDbClick={undefined} onManageClick={openManage} onMenuClick={openMenu} />
-          </section>
-        </main>
+          <AnimatedScreen
+            fillMode="absolute"
+            screenKey="menu"
+            currentScreen={activeTab}
+            navDir={tabTransition}
+            reducedMotion={reducedMotion}
+          >
+            <div className="tab-stack">
+              <AnimatedScreen
+                fillMode="absolute"
+                screenKey="menu"
+                currentScreen={menuNavigation.currentScreen}
+                navDir={menuNavigation.transition}
+                reducedMotion={reducedMotion}
+              >
+                <MenuScreen
+                  colorMode={colorMode}
+                  onColorModeOpen={() => menuNavigation.push('menuMode')}
+                  onInfoOpen={() => menuNavigation.push('menuInfo')}
+                  onLogout={() => {
+                    setUsername('');
+                    setPassword('');
+                    setFocusedField('');
+                    setZoomSession(null);
+                    setFilterSheet(null);
+                    setDatabaseView('browse');
+                    setTabTransition('none');
+                    setActiveTab('db');
+                    setTopBarHidden(false);
+                    manageNavigation.reset('manageHome');
+                    menuNavigation.reset('menu');
+                    authNavigation.navigate('login', 'logout');
+                  }}
+                />
+              </AnimatedScreen>
+
+              <AnimatedScreen
+                fillMode="absolute"
+                screenKey="menuMode"
+                currentScreen={menuNavigation.currentScreen}
+                navDir={menuNavigation.transition}
+                reducedMotion={reducedMotion}
+              >
+                <MenuModeScreen colorMode={colorMode} onBack={() => menuNavigation.pop()} onSelectMode={setColorMode} />
+              </AnimatedScreen>
+
+              <AnimatedScreen
+                fillMode="absolute"
+                screenKey="menuInfo"
+                currentScreen={menuNavigation.currentScreen}
+                navDir={menuNavigation.transition}
+                reducedMotion={reducedMotion}
+              >
+                <MenuInfoScreen onBack={() => menuNavigation.pop()} />
+              </AnimatedScreen>
+            </div>
+          </AnimatedScreen>
+        </div>
+
+        {showBottomTab ? (
+          <BottomTab
+            activeTab={activeTab}
+            compact={bottomTabCompact}
+            onDbClick={handleBottomTabDbClick}
+            onManageClick={handleBottomTabManageClick}
+            onMenuClick={handleBottomTabMenuClick}
+          />
+        ) : null}
+
+        <ImageZoomModal session={zoomSession} onClose={() => setZoomSession(null)} />
       </AnimatedScreen>
-
-      <AnimatedScreen screenKey="manageHome" currentScreen={screen} navDir={navDir} reducedMotion={reducedMotion}>
-        <DataManagementHomeScreen
-          importAlert={manageImportAlert}
-          pendingShipImport={pendingShipImport}
-          onDbOpen={() => {
-            setPendingShipImport(null);
-            navigate('main', 'tabBack');
-          }}
-          onExport={handleExportDatabase}
-          onImportAlertDismiss={() => setManageImportAlert(null)}
-          onImagesImport={handleImagesImport}
-          onPendingShipImportDismiss={() => setPendingShipImport(null)}
-          onPendingShipImportKeepExisting={() => applyPendingShipImport({ keepExisting: true })}
-          onPendingShipImportReplaceAll={() => applyPendingShipImport({ keepExisting: false })}
-          onPendingShipImportReplaceSameRegistrationChange={(checked) =>
-            setPendingShipImport((current) => (current ? { ...current, replaceSameRegistration: checked } : current))
-          }
-          onMenuOpen={() => {
-            setPendingShipImport(null);
-            openMenu();
-          }}
-          onShipEditOpen={() => navigate('manageShipEdit', 'push')}
-          onShipImport={handleShipImport}
-          rows={manageHomePrimaryRows}
-        />
-      </AnimatedScreen>
-
-      <AnimatedScreen screenKey="manageShipEdit" currentScreen={screen} navDir={navDir} reducedMotion={reducedMotion}>
-        <DataManagementShipEditScreen
-          cards={manageShipCardsState}
-          dirty={manageShipDirty}
-          onDismissToast={hideManageSaveToast}
-          originalCards={manageShipSavedState}
-          onAdd={handleManageShipAdd}
-          onBack={() => {
-            if (manageShipDirty) {
-              setManageDiscardTarget('ship');
-              return;
-            }
-
-            navigate('manageHome', 'pop');
-          }}
-          onConfirmDiscard={() => {
-            setManageDiscardTarget(null);
-            restoreManageShipSaved();
-            navigate('manageHome', 'pop');
-          }}
-          onDelete={handleManageShipDelete}
-          onDismissDiscard={() => setManageDiscardTarget(null)}
-          onFieldChange={handleManageShipFieldChange}
-          onImageChange={handleManageShipImageChange}
-          onSave={handleManageShipSave}
-          onSearchChange={setManageShipSearch}
-          onSearchClear={() => setManageShipSearch('')}
-          searchQuery={manageShipSearch}
-          showDiscardModal={manageDiscardTarget === 'ship'}
-          toast={manageSaveToast}
-        />
-      </AnimatedScreen>
-
-      <AnimatedScreen screenKey="search" currentScreen={screen} navDir={navDir} reducedMotion={reducedMotion}>
-        <SearchScreen
-          compact={compact}
-          harborFilter={harborFilter}
-          query={searchQuery}
-          vessels={filteredDisplayVessels}
-          onBack={() => navigate('main', 'pop')}
-          onClear={() => setSearchQuery('')}
-          onHarborFilterOpen={() => openFilter('harbor')}
-          onImageClick={openImageZoom}
-          onManageOpen={openManage}
-          onMenuOpen={openMenu}
-          onQueryChange={setSearchQuery}
-          onToggleCompact={handleCompactChange}
-          onVesselTypeFilterOpen={() => openFilter('vesselType')}
-          vesselTypeFilter={vesselTypeFilter}
-        />
-      </AnimatedScreen>
-
-      <AnimatedScreen screenKey="filter" currentScreen={screen} navDir={navDir} reducedMotion={reducedMotion}>
-        <FilterScreen
-          compact={compact}
-          filterMode={filterMode}
-          harborFilter={harborFilter}
-          harborOptions={harborOptions}
-          query={filterOrigin === 'search' ? searchQuery : ''}
-          vessels={displayVessels}
-          onClose={closeFilter}
-          onHarborSelect={setHarborFilter}
-          onImageClick={openImageZoom}
-          onManageOpen={openManage}
-          onMenuOpen={openMenu}
-          onSearchOpen={handleFilterSearchOpen}
-          onToggleCompact={handleCompactChange}
-          onVesselTypeSelect={setVesselTypeFilter}
-          vesselTypeOptions={vesselTypeOptions}
-          vesselTypeFilter={vesselTypeFilter}
-        />
-      </AnimatedScreen>
-
-      <AnimatedScreen screenKey="menu" currentScreen={screen} navDir={navDir} reducedMotion={reducedMotion}>
-        <MenuScreen
-          colorMode={colorMode}
-          compact={compact}
-          onColorModeOpen={() => navigate('menuMode', 'none')}
-          onDbOpen={() => navigate('main', 'tabBack')}
-          onInfoOpen={() => navigate('menuInfo', 'none')}
-          onManageOpen={openManage}
-          onLogout={() => {
-            setUsername('');
-            setPassword('');
-            setFocusedField('');
-            navigate('login', 'logout');
-          }}
-        />
-      </AnimatedScreen>
-
-      <AnimatedScreen screenKey="menuMode" currentScreen={screen} navDir={navDir} reducedMotion={reducedMotion}>
-        <MenuModeScreen
-          colorMode={colorMode}
-          onBack={() => navigate('menu', 'none')}
-          onSelectMode={setColorMode}
-        />
-      </AnimatedScreen>
-
-      <AnimatedScreen screenKey="menuInfo" currentScreen={screen} navDir={navDir} reducedMotion={reducedMotion}>
-        <MenuInfoScreen onBack={() => navigate('menu', 'none')} />
-      </AnimatedScreen>
-
-      <ImageZoomModal session={zoomSession} onClose={() => setZoomSession(null)} />
     </div>
   );
 }

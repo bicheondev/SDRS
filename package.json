@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "es-hangul": "^2.3.8",
     "framer-motion": "^12.38.0",
     "jszip": "^3.10.1",
     "react": "^19.1.0",

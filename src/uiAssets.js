@@ -42,6 +42,7 @@ export const assets = {
   manageEdit: 'https://www.figma.com/api/mcp/asset/5aacef5c-41cf-4ed1-ac35-85ecb06083ed',
   manageDelete: 'https://www.figma.com/api/mcp/asset/2daeef80-e6c7-4b44-8d14-c07a9dfa9513',
   manageImportCheck: 'https://www.figma.com/api/mcp/asset/70a7a187-06c0-4728-a724-7c22551f6498',
+  toastCheckCircle: 'https://www.figma.com/api/mcp/asset/6ca01545-a765-4bb4-b12b-026ade71c7cc',
   emptySearch: 'https://www.figma.com/api/mcp/asset/5678f554-ac31-41d2-9337-d64fb30f32a5',
 };
 

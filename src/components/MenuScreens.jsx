@@ -2,7 +2,6 @@ import { motion } from 'framer-motion';
 
 import { getPressMotion } from '../motion';
 import { assets, colorModeLabels } from '../uiAssets';
-import BottomTab from './BottomTab';
 
 function MenuRow({ children, detail, onClick, showArrow = false }) {
   return (
@@ -42,7 +41,7 @@ function SubpageTopBar({ title, onBack }) {
   );
 }
 
-export function MenuScreen({ colorMode, compact, onColorModeOpen, onDbOpen, onInfoOpen, onLogout, onManageOpen }) {
+export function MenuScreen({ colorMode, onColorModeOpen, onInfoOpen, onLogout }) {
   return (
     <main className="app-shell">
       <section className="phone-screen phone-screen--menu">
@@ -62,8 +61,6 @@ export function MenuScreen({ colorMode, compact, onColorModeOpen, onDbOpen, onIn
             <MenuRow onClick={onLogout}>로그아웃</MenuRow>
           </div>
         </div>
-
-        <BottomTab activeTab="menu" compact={compact} onDbClick={onDbOpen} onManageClick={onManageOpen} onMenuClick={undefined} />
       </section>
     </main>
   );

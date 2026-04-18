@@ -1,21 +1,18 @@
-import { motion } from 'framer-motion';
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
+import { forwardRef, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { filterVessels } from '../appDomain';
-import { getPressMotion } from '../motion';
+import { matchesSearchQuery } from '../search';
+import { getPressMotion, getSheetOverlayMotion, getSheetPanelMotion } from '../motion';
 import { assets } from '../uiAssets';
 import BottomTab from './BottomTab';
 import { StatusIcon } from './Icons';
 
-function applySearchQuery(vessels, query) {
-  const loweredQuery = query.trim().toLowerCase();
-
-  if (!loweredQuery) {
-    return vessels;
-  }
-
+export function applySearchQuery(vessels, query) {
   return vessels.filter((vessel) =>
-    [vessel.name, vessel.registration, vessel.port, vessel.business].some((value) => value.toLowerCase().includes(loweredQuery)),
+    matchesSearchQuery([vessel.name, vessel.registration, vessel.port, vessel.business], query, {
+      choseongFields: [vessel.name],
+    }),
   );
 }
 
@@ -39,8 +36,6 @@ function FiltersRow({
   const anyDropdownOpen = openState !== 'closed';
   const harborArrow = anyDropdownOpen ? assets.arrowUp : compact ? assets.chevronCompact : assets.chevron;
   const vesselArrow = anyDropdownOpen ? assets.arrowUp : compact ? assets.chevronCompact : assets.chevron;
-  const compactViewIcon = compact ? assets.listIconCompact : assets.listIcon;
-  const cardViewIcon = compact ? assets.cardIconCompact : assets.cardIcon;
 
   return (
     <div className={`top-bar__filters ${inFilterSheet ? 'top-bar__filters--filter-sheet' : ''}`}>
@@ -87,7 +82,18 @@ function FiltersRow({
           onClick={() => onToggleCompact(true)}
           {...getPressMotion('icon')}
         >
-          <img src={compactViewIcon} alt="" />
+          <span className="view-option-icon" aria-hidden="true">
+            <img
+              className={`view-option-icon__image ${compact ? 'view-option-icon__image--active' : ''}`.trim()}
+              src={assets.listIconCompact}
+              alt=""
+            />
+            <img
+              className={`view-option-icon__image ${compact ? '' : 'view-option-icon__image--active'}`.trim()}
+              src={assets.listIcon}
+              alt=""
+            />
+          </span>
         </motion.button>
         <motion.button
           className={`icon-button pressable-control pressable-control--icon ${compact ? '' : 'icon-button--active'}`}
@@ -96,7 +102,18 @@ function FiltersRow({
           onClick={() => onToggleCompact(false)}
           {...getPressMotion('icon')}
         >
-          <img src={cardViewIcon} alt="" />
+          <span className="view-option-icon" aria-hidden="true">
+            <img
+              className={`view-option-icon__image ${compact ? '' : 'view-option-icon__image--active'}`.trim()}
+              src={assets.cardIcon}
+              alt=""
+            />
+            <img
+              className={`view-option-icon__image ${compact ? 'view-option-icon__image--active' : ''}`.trim()}
+              src={assets.cardIconCompact}
+              alt=""
+            />
+          </span>
         </motion.button>
       </div>
     </div>
@@ -297,7 +314,7 @@ export function VesselEmptyState() {
   );
 }
 
-function SearchTopBar({
+export function SearchTopBar({
   compact,
   harborFilter,
   query,
@@ -353,6 +370,33 @@ function SearchTopBar({
   );
 }
 
+export const VesselResults = forwardRef(function VesselResults(
+  { className = 'main-content', compact, vessels, onImageClick, ...contentProps },
+  ref,
+) {
+  return (
+    <div className={className} ref={ref} {...contentProps}>
+      {vessels.length === 0 ? (
+        <VesselEmptyState />
+      ) : compact ? (
+        vessels.map((vessel, index) => (
+          <div key={vessel.id}>
+            <CompactVesselCard vessel={vessel} onImageClick={(selectedVessel) => onImageClick(selectedVessel, vessels)} />
+            {index < vessels.length - 1 ? <div className="section-divider" /> : null}
+          </div>
+        ))
+      ) : (
+        vessels.map((vessel, index) => (
+          <div key={vessel.id}>
+            <VesselCard vessel={vessel} onImageClick={(selectedVessel) => onImageClick(selectedVessel, vessels)} />
+            {index < vessels.length - 1 ? <div className="section-divider" /> : null}
+          </div>
+        ))
+      )}
+    </div>
+  );
+});
+
 export function SearchScreen({
   compact,
   harborFilter,
@@ -370,7 +414,6 @@ export function SearchScreen({
   onVesselTypeFilterOpen,
 }) {
   const searchedVessels = useMemo(() => applySearchQuery(vessels, query), [vessels, query]);
-  const handleImageClick = (selectedVessel) => onImageClick(selectedVessel, searchedVessels);
 
   return (
     <main className="app-shell">
@@ -388,25 +431,7 @@ export function SearchScreen({
           onVesselTypeFilterOpen={onVesselTypeFilterOpen}
         />
 
-        <div className="main-content main-content--search">
-          {searchedVessels.length === 0 ? (
-            <VesselEmptyState />
-          ) : compact ? (
-            searchedVessels.map((vessel, index) => (
-              <div key={vessel.id}>
-                <CompactVesselCard vessel={vessel} onImageClick={handleImageClick} />
-                {index < searchedVessels.length - 1 ? <div className="section-divider" /> : null}
-              </div>
-            ))
-          ) : (
-            searchedVessels.map((vessel, index) => (
-              <div key={vessel.id}>
-                <VesselCard vessel={vessel} onImageClick={handleImageClick} />
-                {index < searchedVessels.length - 1 ? <div className="section-divider" /> : null}
-              </div>
-            ))
-          )}
-        </div>
+        <VesselResults className="main-content main-content--search" compact={compact} vessels={searchedVessels} onImageClick={onImageClick} />
 
         <BottomTab activeTab="db" compact={compact} onDbClick={onBack} onManageClick={onManageOpen} onMenuClick={onMenuOpen} />
       </section>
@@ -432,6 +457,7 @@ export function FilterScreen({
   vesselTypeFilter,
   vesselTypeOptions,
 }) {
+  const reducedMotion = useReducedMotion() ?? false;
   const overlayRef = useRef(null);
   const harborButtonRef = useRef(null);
   const harborLabelRef = useRef(null);
@@ -489,10 +515,11 @@ export function FilterScreen({
     () => applySearchQuery(filterVessels(vessels, harborFilter, vesselTypeFilter), query),
     [harborFilter, query, vesselTypeFilter, vessels],
   );
-  const handleImageClick = (selectedVessel) => onImageClick(selectedVessel, filteredVessels);
+  const layerMotion = getSheetOverlayMotion(reducedMotion);
+  const panelMotion = getSheetPanelMotion(reducedMotion);
 
   return (
-    <main className="app-shell">
+    <motion.main className="app-shell filter-screen-layer" {...layerMotion}>
       <section className="phone-screen phone-screen--search phone-screen--filter">
         <TopBar
           blurViewOptions
@@ -515,32 +542,14 @@ export function FilterScreen({
         />
 
         <div className="filter-screen__results">
-          <div className="main-content main-content--filter">
-            {filteredVessels.length === 0 ? (
-              <VesselEmptyState />
-            ) : compact ? (
-              filteredVessels.map((vessel, index) => (
-                <div key={vessel.id}>
-                  <CompactVesselCard vessel={vessel} onImageClick={handleImageClick} />
-                  {index < filteredVessels.length - 1 ? <div className="section-divider" /> : null}
-                </div>
-              ))
-            ) : (
-              filteredVessels.map((vessel, index) => (
-                <div key={vessel.id}>
-                  <VesselCard vessel={vessel} onImageClick={handleImageClick} />
-                  {index < filteredVessels.length - 1 ? <div className="section-divider" /> : null}
-                </div>
-              ))
-            )}
-          </div>
+          <VesselResults className="main-content main-content--filter" compact={compact} vessels={filteredVessels} onImageClick={onImageClick} />
         </div>
 
         <div className="filter-screen__overlay">
           <button className="filter-screen__backdrop interaction-reset" type="button" aria-label="필터 닫기" onClick={onClose} />
         </div>
 
-        <div className="filter-screen__panel" ref={overlayRef}>
+        <motion.div className="filter-screen__panel" ref={overlayRef} {...panelMotion}>
           <div className="filter-screen__columns">
             <div className="filter-screen__column" style={{ top: `${columnLayout.top}px`, left: `${columnLayout.harborLeft}px` }}>
               {harborOptions.map((option) => (
@@ -586,10 +595,10 @@ export function FilterScreen({
               ))}
             </div>
           </div>
-        </div>
+        </motion.div>
 
         <BottomTab activeTab="db" compact={compact} onDbClick={onClose} onManageClick={onManageOpen} onMenuClick={onMenuOpen} />
       </section>
-    </main>
+    </motion.main>
   );
 }

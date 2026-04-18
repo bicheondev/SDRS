@@ -1,10 +1,10 @@
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { useRef, useState } from 'react';
+import { AnimatePresence, motion, Reorder, useDragControls, useReducedMotion } from 'framer-motion';
+import { useEffect, useRef, useState } from 'react';
 
 import { emptyManageShipCard } from '../appDomain';
+import { matchesSearchQuery } from '../search';
 import { getModalBackdropMotion, getModalCardMotion, getPressMotion, getToastMotion } from '../motion';
 import { assets, manageHomeSecondaryRows } from '../uiAssets';
-import BottomTab from './BottomTab';
 import { DeleteIcon, PlusIcon, StatusIcon } from './Icons';
 
 function DataManagementHomeRow({ label, onClick, tone = 'default', value }) {
@@ -36,11 +36,9 @@ export function DataManagementHomeScreen({
   importAlert,
   pendingShipImport,
   rows,
-  onDbOpen,
   onExport,
   onImagesImport,
   onImportAlertDismiss,
-  onMenuOpen,
   onPendingShipImportDismiss,
   onPendingShipImportKeepExisting,
   onPendingShipImportReplaceAll,
@@ -106,8 +104,6 @@ export function DataManagementHomeScreen({
             event.target.value = '';
           }}
         />
-
-        <BottomTab activeTab="manage" compact={false} onDbClick={onDbOpen} onManageClick={undefined} onMenuClick={onMenuOpen} />
 
         <AnimatePresence>
           {importAlert ? (
@@ -407,6 +403,132 @@ function ManageShipCard({
   );
 }
 
+function ManageShipReorderItem({
+  card,
+  originalCard,
+  onDelete,
+  onFieldChange,
+  onImageChange,
+  showDivider = false,
+}) {
+  const reducedMotion = useReducedMotion() ?? false;
+  const dragControls = useDragControls();
+  const longPressTimerRef = useRef(null);
+  const pointerIdRef = useRef(null);
+  const pointerStartRef = useRef({ x: 0, y: 0 });
+  const dragStartedRef = useRef(false);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const clearLongPressTimer = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const resetLongPressState = () => {
+    clearLongPressTimer();
+    pointerIdRef.current = null;
+    dragStartedRef.current = false;
+  };
+
+  useEffect(() => resetLongPressState, []);
+
+  const handlePointerDown = (event) => {
+    if (event.button !== undefined && event.button !== 0) {
+      return;
+    }
+
+    const nativeEvent = event.nativeEvent;
+
+    pointerIdRef.current = event.pointerId;
+    pointerStartRef.current = { x: event.clientX, y: event.clientY };
+    dragStartedRef.current = false;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+
+    longPressTimerRef.current = window.setTimeout(() => {
+      if (pointerIdRef.current !== event.pointerId) {
+        return;
+      }
+
+      dragStartedRef.current = true;
+      dragControls.start(nativeEvent, { snapToCursor: false });
+    }, 260);
+  };
+
+  const handlePointerMove = (event) => {
+    if (pointerIdRef.current !== event.pointerId || dragStartedRef.current) {
+      return;
+    }
+
+    const deltaX = event.clientX - pointerStartRef.current.x;
+    const deltaY = event.clientY - pointerStartRef.current.y;
+
+    if (Math.hypot(deltaX, deltaY) > 8) {
+      clearLongPressTimer();
+    }
+  };
+
+  const handlePointerEnd = (event) => {
+    if (pointerIdRef.current !== event.pointerId) {
+      return;
+    }
+
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    resetLongPressState();
+  };
+
+  return (
+    <div className="manage-edit-screen__reorder-entry">
+      <Reorder.Item
+        as="div"
+        className={`manage-edit-screen__reorder-item ${isDragging ? 'manage-edit-screen__reorder-item--dragging' : ''}`.trim()}
+        drag="y"
+        dragControls={dragControls}
+        dragListener={false}
+        value={card}
+        whileDrag={reducedMotion ? { zIndex: 4 } : { scale: 1.01, zIndex: 4 }}
+        onDragStart={() => setIsDragging(true)}
+        onDragEnd={() => {
+          setIsDragging(false);
+          resetLongPressState();
+        }}
+      >
+        <div className="manage-edit-screen__section">
+          <button
+            className={`manage-ship-card__reorder-handle interaction-reset ${isDragging ? 'manage-ship-card__reorder-handle--dragging' : ''}`.trim()}
+            type="button"
+            aria-label="길게 눌러 선박 순서 변경"
+            onContextMenu={(event) => event.preventDefault()}
+            onPointerCancel={handlePointerEnd}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerEnd}
+          >
+            <span className="material-symbols-rounded manage-ship-card__reorder-icon" aria-hidden="true">
+              drag_indicator
+            </span>
+            <span className="manage-ship-card__reorder-label">길게 눌러 순서 변경</span>
+          </button>
+
+          <ManageShipCard
+            card={card}
+            editable
+            originalCard={originalCard}
+            showDeleteButton
+            showEditButton={false}
+            onDelete={() => onDelete(card.id)}
+            onFieldChange={(field, value) => onFieldChange(card.id, field, value)}
+            onImageChange={(file) => onImageChange(card.id, file)}
+          />
+        </div>
+      </Reorder.Item>
+
+      {showDivider ? <div className="section-divider" /> : null}
+    </div>
+  );
+}
+
 function ManageAlertModal({
   cancelLabel = '아니요',
   confirmLabel = '네',
@@ -521,22 +643,47 @@ function ManageShipImportModal({
 }
 
 function ManageSavedToast({ message, onDismiss }) {
+  const maxVisibleDragOffset = 24;
+  const dismissDragThreshold = 56;
   const reducedMotion = useReducedMotion() ?? false;
+  const manualDismissDuration = reducedMotion ? 80 : 160;
   const toastMotion = getToastMotion(reducedMotion);
   const [dragOffset, setDragOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
-  const dragOffsetRef = useRef(0);
+  const [dismissing, setDismissing] = useState(false);
+  const [dismissOpacity, setDismissOpacity] = useState(1);
+  const shellRef = useRef(null);
+  const dragDistanceRef = useRef(0);
   const dragPointerIdRef = useRef(null);
   const dragStartYRef = useRef(0);
+  const dismissFrameRef = useRef(null);
+  const dismissTimeoutRef = useRef(null);
+
+  const clearPendingDismiss = () => {
+    if (dismissFrameRef.current !== null) {
+      cancelAnimationFrame(dismissFrameRef.current);
+      dismissFrameRef.current = null;
+    }
+
+    if (dismissTimeoutRef.current !== null) {
+      clearTimeout(dismissTimeoutRef.current);
+      dismissTimeoutRef.current = null;
+    }
+  };
 
   const resetDragState = () => {
+    clearPendingDismiss();
     setDragging(false);
     setDragOffset(0);
-    dragOffsetRef.current = 0;
+    setDismissOpacity(1);
+    dragDistanceRef.current = 0;
     dragPointerIdRef.current = null;
   };
 
+  useEffect(() => clearPendingDismiss, []);
+
   const handlePointerDown = (event) => {
+    setDismissing(false);
     dragStartYRef.current = event.clientY;
     dragPointerIdRef.current = event.pointerId;
     setDragging(true);
@@ -549,9 +696,9 @@ function ManageSavedToast({ message, onDismiss }) {
       return;
     }
 
-    const nextDragOffset = Math.max(0, event.clientY - dragStartYRef.current);
-    dragOffsetRef.current = nextDragOffset;
-    setDragOffset(nextDragOffset);
+    const nextDragDistance = Math.max(0, event.clientY - dragStartYRef.current);
+    dragDistanceRef.current = nextDragDistance;
+    setDragOffset(Math.min(maxVisibleDragOffset, nextDragDistance));
   };
 
   const handlePointerUp = (event) => {
@@ -559,9 +706,26 @@ function ManageSavedToast({ message, onDismiss }) {
       return;
     }
 
-    if (dragOffsetRef.current > 56) {
-      resetDragState();
-      onDismiss();
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+
+    if (dragDistanceRef.current > dismissDragThreshold) {
+      const currentVisibleOffset = Math.min(maxVisibleDragOffset, dragDistanceRef.current);
+      const currentOpacity = 1 - currentVisibleOffset / maxVisibleDragOffset;
+
+      setDismissing(true);
+      setDragging(false);
+      setDragOffset(currentVisibleOffset);
+      setDismissOpacity(currentOpacity);
+      dragDistanceRef.current = 0;
+      dragPointerIdRef.current = null;
+      dismissFrameRef.current = requestAnimationFrame(() => {
+        dismissFrameRef.current = null;
+        setDismissOpacity(0);
+      });
+      dismissTimeoutRef.current = setTimeout(() => {
+        dismissTimeoutRef.current = null;
+        onDismiss();
+      }, manualDismissDuration);
       return;
     }
 
@@ -576,9 +740,15 @@ function ManageSavedToast({ message, onDismiss }) {
     resetDragState();
   };
 
+  const dragOpacity = 1 - dragOffset / maxVisibleDragOffset;
+  const fadeOpacity = dragging ? dragOpacity : dismissing ? dismissOpacity : 1;
+
   return (
     <div
-      className={`manage-saved-toast-shell ${dragging ? 'manage-saved-toast-shell--dragging' : ''}`.trim()}
+      ref={shellRef}
+      className={`manage-saved-toast-shell ${dragging ? 'manage-saved-toast-shell--dragging' : ''} ${
+        dismissing ? 'manage-saved-toast-shell--dismissing' : ''
+      }`.trim()}
       role="status"
       aria-live="polite"
       style={{ '--manage-saved-toast-drag-offset': `${dragOffset}px` }}
@@ -587,10 +757,15 @@ function ManageSavedToast({ message, onDismiss }) {
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerCancel}
     >
-      <motion.div className="manage-saved-toast" {...toastMotion}>
-        <StatusIcon name="check_circle" className="manage-saved-toast__icon" />
-        <span className="manage-saved-toast__message">{message}</span>
-      </motion.div>
+      <div
+        className={`manage-saved-toast-fade ${dismissing ? 'manage-saved-toast-fade--dismissing' : ''}`.trim()}
+        style={{ opacity: fadeOpacity }}
+      >
+        <motion.div className="manage-saved-toast" {...toastMotion}>
+          <img className="manage-saved-toast__icon" src={assets.toastCheckCircle} alt="" />
+          <span className="manage-saved-toast__message">{message}</span>
+        </motion.div>
+      </div>
     </div>
   );
 }
@@ -610,16 +785,18 @@ export function DataManagementShipEditScreen({
   onDismissToast,
   onFieldChange,
   onImageChange,
+  onReorder,
   onSave,
   onSearchChange,
   onSearchClear,
 }) {
-  const loweredQuery = searchQuery.trim().toLowerCase();
-  const visibleCards = loweredQuery
+  const normalizedQuery = searchQuery.trim();
+  const reorderEnabled = normalizedQuery === '';
+  const visibleCards = normalizedQuery
     ? cards.filter((card) =>
-        [card.searchKey, card.title, card.registration, card.port, card.business].some((value) =>
-          value.toLowerCase().includes(loweredQuery),
-        ),
+        matchesSearchQuery([card.searchKey, card.title, card.registration, card.port, card.business], searchQuery, {
+          choseongFields: [card.searchKey, card.title],
+        }),
       )
     : cards;
 
@@ -628,25 +805,48 @@ export function DataManagementShipEditScreen({
       <section className="phone-screen phone-screen--manage-edit">
         <ManageSubpageTopBar title="선박 DB 편집하기" saveActive={dirty} onAdd={onAdd} onBack={onBack} onSave={dirty ? onSave : undefined} />
 
-        <div className="manage-edit-screen__content">
-          {visibleCards.map((card, index) => (
-            <div key={`${card.id}-${index}`}>
-              <div className="manage-edit-screen__section">
-                <ManageShipCard
-                  card={card}
-                  editable
-                  originalCard={originalCards.find((item) => item.id === card.id)}
-                  showDeleteButton
-                  showEditButton={false}
-                  onDelete={() => onDelete(card.id)}
-                  onFieldChange={(field, value) => onFieldChange(card.id, field, value)}
-                  onImageChange={(file) => onImageChange(card.id, file)}
-                />
+        {reorderEnabled ? (
+          <Reorder.Group
+            as="div"
+            axis="y"
+            className="manage-edit-screen__content manage-edit-screen__reorder-list"
+            layoutScroll
+            values={cards}
+            onReorder={onReorder}
+          >
+            {cards.map((card, index) => (
+              <ManageShipReorderItem
+                key={card.id}
+                card={card}
+                originalCard={originalCards.find((item) => item.id === card.id)}
+                showDivider={index < cards.length - 1}
+                onDelete={onDelete}
+                onFieldChange={onFieldChange}
+                onImageChange={onImageChange}
+              />
+            ))}
+          </Reorder.Group>
+        ) : (
+          <div className="manage-edit-screen__content">
+            {visibleCards.map((card, index) => (
+              <div key={card.id}>
+                <div className="manage-edit-screen__section">
+                  <ManageShipCard
+                    card={card}
+                    editable
+                    originalCard={originalCards.find((item) => item.id === card.id)}
+                    showDeleteButton
+                    showEditButton={false}
+                    onDelete={() => onDelete(card.id)}
+                    onFieldChange={(field, value) => onFieldChange(card.id, field, value)}
+                    onImageChange={(file) => onImageChange(card.id, file)}
+                  />
+                </div>
+                {index < visibleCards.length - 1 ? <div className="section-divider" /> : null}
               </div>
-              {index < visibleCards.length - 1 ? <div className="section-divider" /> : null}
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         <ManageSearchBar value={searchQuery} onChange={onSearchChange} onClear={onSearchClear} />
 

@@ -4,7 +4,11 @@ const toBezier = (points) => `cubic-bezier(${points.join(', ')})`;
 export const motionTokens = {
   ease: {
     ios: [0.22, 0.61, 0.36, 1],
+    stack: [0.4, 0, 0.2, 1],
+    submenu: [0.32, 0.72, 0, 1],
     softExit: [0.32, 0.72, 0, 1],
+    fadeIn: [0.42, 0, 1, 1],
+    fadeOut: [0, 0, 0.58, 1],
     linear: [0, 0, 1, 1],
   },
   duration: {
@@ -48,6 +52,8 @@ export const motionTokens = {
     duration: 0.08,
   },
 };
+
+const stackEase = motionTokens.ease.stack;
 
 export const motionDurationsMs = {
   instant: Math.round(motionTokens.duration.instant * 1000),
@@ -107,29 +113,21 @@ const SCREEN_STATES = {
     enter: { x: 0, y: 0, opacity: 1, scale: 1 },
     exit: { x: 0, y: 0, opacity: 1, scale: 1 },
   },
+  tabForward: {
+    enter: { x: '100%', y: 0, opacity: 0.42, scale: 1, filter: 'blur(2px)' },
+    exit: { x: '-100%', y: 0, opacity: 0, scale: 1, filter: 'blur(3px)' },
+  },
+  tabBackward: {
+    enter: { x: '-100%', y: 0, opacity: 0.42, scale: 1, filter: 'blur(2px)' },
+    exit: { x: '100%', y: 0, opacity: 0, scale: 1, filter: 'blur(3px)' },
+  },
   push: {
-    enter: { x: 32, y: 0, opacity: 1, scale: 1 },
-    exit: { x: -12, y: 0, opacity: 0.96, scale: 0.996 },
+    enter: { x: '100%', y: 0, opacity: 0.72, scale: 1 },
+    exit: { x: '-18%', y: 0, opacity: 0.72, scale: 0.985 },
   },
   pop: {
-    enter: { x: -12, y: 0, opacity: 0.96, scale: 0.996 },
-    exit: { x: 32, y: 0, opacity: 1, scale: 1 },
-  },
-  tab: {
-    enter: { x: 0, y: 0, opacity: 0, scale: 0.998 },
-    exit: { x: 0, y: 0, opacity: 0, scale: 1.002 },
-  },
-  tabBack: {
-    enter: { x: 0, y: 0, opacity: 0, scale: 0.998 },
-    exit: { x: 0, y: 0, opacity: 0, scale: 0.998 },
-  },
-  sheet: {
-    enter: { x: 0, y: motionTokens.offset.sheetLift, opacity: 0, scale: 1 },
-    exit: { x: 0, y: -4, opacity: 0, scale: 0.998 },
-  },
-  sheetBack: {
-    enter: { x: 0, y: 2, opacity: 0, scale: 0.998 },
-    exit: { x: 0, y: motionTokens.offset.sheetLift, opacity: 0, scale: 0.998 },
+    enter: { x: '-18%', y: 0, opacity: 0.72, scale: 0.985 },
+    exit: { x: '100%', y: 0, opacity: 0.72, scale: 1 },
   },
   loginToMain: {
     enter: { x: 0, y: motionTokens.offset.loginLift, opacity: 0, scale: 0.982 },
@@ -141,8 +139,8 @@ const SCREEN_STATES = {
   },
 };
 
-export const hiddenScreenState = { opacity: 0, x: 0, y: 0, scale: 1 };
-export const visibleScreenState = { opacity: 1, x: 0, y: 0, scale: 1 };
+export const hiddenScreenState = { opacity: 0, x: 0, y: 0, scale: 1, filter: 'blur(0px)' };
+export const visibleScreenState = { opacity: 1, x: 0, y: 0, scale: 1, filter: 'blur(0px)' };
 
 export function getScreenMotionState(direction, phase, reducedMotion = false) {
   if (reducedMotion) {
@@ -160,7 +158,7 @@ export function getScreenMotionState(direction, phase, reducedMotion = false) {
   return SCREEN_STATES[direction]?.[phase] ?? (phase === 'enter' ? visibleScreenState : hiddenScreenState);
 }
 
-export function getScreenTransition(direction, reducedMotion = false) {
+export function getScreenTransition(direction, reducedMotion = false, phase = 'enter') {
   if (direction === 'none') {
     return { duration: 0, ease: motionTokens.ease.linear };
   }
@@ -169,19 +167,40 @@ export function getScreenTransition(direction, reducedMotion = false) {
     return { duration: motionTokens.reduced.duration, ease: motionTokens.ease.linear };
   }
 
-  if (direction === 'push' || direction === 'pop') {
+  if (direction === 'tabForward' || direction === 'tabBackward') {
     return {
-      duration: motionTokens.duration.screen,
-      ease: motionTokens.ease.ios,
+      x: { duration: 0.42, ease: stackEase },
+      opacity: {
+        duration: 0.38,
+        ease: phase === 'enter' ? motionTokens.ease.fadeIn : motionTokens.ease.fadeOut,
+      },
+      filter: {
+        duration: 0.34,
+        ease: phase === 'enter' ? motionTokens.ease.fadeIn : motionTokens.ease.fadeOut,
+      },
     };
   }
 
-  if (direction === 'tab' || direction === 'tabBack') {
-    return motionTokens.spring.tab;
+  if (direction === 'push') {
+    return {
+      x: { duration: 0.46, ease: stackEase },
+      scale: { duration: 0.46, ease: stackEase },
+      opacity: {
+        duration: 0.24,
+        ease: phase === 'enter' ? motionTokens.ease.fadeIn : motionTokens.ease.fadeOut,
+      },
+    };
   }
 
-  if (direction === 'sheet' || direction === 'sheetBack') {
-    return motionTokens.spring.sheet;
+  if (direction === 'pop') {
+    return {
+      x: { duration: 0.46, ease: stackEase },
+      scale: { duration: 0.46, ease: stackEase },
+      opacity: {
+        duration: 0.24,
+        ease: phase === 'enter' ? motionTokens.ease.fadeIn : motionTokens.ease.fadeOut,
+      },
+    };
   }
 
   if (direction === 'loginToMain' || direction === 'logout') {
@@ -196,19 +215,49 @@ export function getScreenZIndex(direction, entering) {
     return entering ? 3 : 1;
   }
 
+  if (direction === 'tabForward' || direction === 'tabBackward') {
+    return entering ? 2 : 3;
+  }
+
   if (entering) {
-    if (direction === 'push' || direction === 'tab' || direction === 'sheet' || direction === 'loginToMain') {
+    if (direction === 'pop') {
+      return 1;
+    }
+
+    if (direction === 'loginToMain') {
       return 3;
     }
 
-    return 1;
+    return 3;
   }
 
-  if (direction === 'pop' || direction === 'tabBack' || direction === 'sheetBack' || direction === 'logout') {
+  if (direction === 'tabForward' || direction === 'tabBackward' || direction === 'pop' || direction === 'logout') {
     return 3;
   }
 
   return 1;
+}
+
+export function getSheetOverlayMotion(reducedMotion = false) {
+  return {
+    initial: { opacity: 0 },
+    animate: { opacity: 1 },
+    exit: { opacity: 0 },
+    transition: reducedMotion
+      ? { duration: motionTokens.reduced.duration, ease: motionTokens.ease.linear }
+      : { duration: motionTokens.duration.fast, ease: motionTokens.ease.ios },
+  };
+}
+
+export function getSheetPanelMotion(reducedMotion = false) {
+  return {
+    initial: reducedMotion ? { opacity: 0 } : { opacity: 0, y: motionTokens.offset.sheetLift },
+    animate: { opacity: 1, y: 0 },
+    exit: reducedMotion ? { opacity: 0 } : { opacity: 0, y: motionTokens.offset.sheetLift },
+    transition: reducedMotion
+      ? { duration: motionTokens.reduced.duration, ease: motionTokens.ease.linear }
+      : motionTokens.spring.sheet,
+  };
 }
 
 export function getModalBackdropMotion(reducedMotion = false) {

@@ -9,7 +9,22 @@ import {
   visibleScreenState,
 } from '../motion';
 
-export default function AnimatedScreen({ children, currentScreen, navDir, reducedMotion = false, screenKey }) {
+function waitForNextFrame() {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      resolve();
+    });
+  });
+}
+
+export default function AnimatedScreen({
+  children,
+  currentScreen,
+  fillMode = 'fixed',
+  navDir,
+  reducedMotion = false,
+  screenKey,
+}) {
   const [scope, animate] = useAnimate();
   const isActive = currentScreen === screenKey;
   const previousActiveRef = useRef(null);
@@ -49,7 +64,7 @@ export default function AnimatedScreen({ children, currentScreen, navDir, reduce
         element.style.zIndex = '1';
       }
 
-      animate(element, isActive ? visibleScreenState : hiddenScreenState, getScreenTransition(navDir, true)).then(() => {
+      animate(element, isActive ? visibleScreenState : hiddenScreenState, getScreenTransition(navDir, true, isActive ? 'enter' : 'exit')).then(() => {
         if (cancelled || !element) {
           return;
         }
@@ -74,12 +89,14 @@ export default function AnimatedScreen({ children, currentScreen, navDir, reduce
       element.style.visibility = 'visible';
       element.style.zIndex = String(getScreenZIndex(navDir, true));
 
-      animate(element, getScreenMotionState(navDir, 'enter', reducedMotion), { duration: 0 }).then(() => {
+      animate(element, getScreenMotionState(navDir, 'enter', reducedMotion), { duration: 0 }).then(async () => {
+        await waitForNextFrame();
+
         if (cancelled || !element) {
           return;
         }
 
-        animate(element, visibleScreenState, getScreenTransition(navDir, reducedMotion)).then(() => {
+        animate(element, visibleScreenState, getScreenTransition(navDir, reducedMotion, 'enter')).then(() => {
           if (!cancelled && element) {
             element.style.zIndex = '1';
             element.style.willChange = '';
@@ -89,7 +106,7 @@ export default function AnimatedScreen({ children, currentScreen, navDir, reduce
     } else {
       element.style.zIndex = String(getScreenZIndex(navDir, false));
 
-      animate(element, getScreenMotionState(navDir, 'exit', reducedMotion), getScreenTransition(navDir, reducedMotion)).then(() => {
+      animate(element, getScreenMotionState(navDir, 'exit', reducedMotion), getScreenTransition(navDir, reducedMotion, 'exit')).then(() => {
         if (!cancelled && element) {
           animate(element, hiddenScreenState, { duration: 0 });
           element.style.visibility = 'hidden';
@@ -108,7 +125,7 @@ export default function AnimatedScreen({ children, currentScreen, navDir, reduce
     <div
       className="animated-screen"
       ref={scope}
-      style={{ position: 'fixed', inset: 0, overflow: 'hidden', pointerEvents: isActive ? 'auto' : 'none' }}
+      style={{ position: fillMode, inset: 0, overflow: 'hidden', pointerEvents: isActive ? 'auto' : 'none' }}
       aria-hidden={!isActive}
       inert={isActive ? undefined : ''}
     >
