@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { motion, useAnimate } from 'framer-motion';
 import noImagePlaceholder from '../no-image.svg';
 import {
   applyImagesToShipRecords,
@@ -59,6 +60,7 @@ const assets = {
   manageCancel: 'https://www.figma.com/api/mcp/asset/e7a46463-a09e-4e29-ad10-c5fb0349a8a5',
   manageEdit: 'https://www.figma.com/api/mcp/asset/5aacef5c-41cf-4ed1-ac35-85ecb06083ed',
   manageDelete: 'https://www.figma.com/api/mcp/asset/2daeef80-e6c7-4b44-8d14-c07a9dfa9513',
+  manageImportCheck: 'https://www.figma.com/api/mcp/asset/70a7a187-06c0-4728-a724-7c22551f6498',
   emptySearch: 'https://www.figma.com/api/mcp/asset/5678f554-ac31-41d2-9337-d64fb30f32a5',
 };
 
@@ -201,6 +203,32 @@ function areManageShipCardsEqual(cardsA, cardsB) {
       Boolean(card.detector) === Boolean(otherCard.detector)
     );
   });
+}
+
+function normalizeRegistrationKey(value) {
+  return String(value ?? '').trim();
+}
+
+function mergeImportedShipRecords(existingShipRecords, importedShipRecords, options = {}) {
+  const { keepExisting = false, replaceSameRegistration = false } = options;
+
+  if (!keepExisting) {
+    return importedShipRecords;
+  }
+
+  if (!replaceSameRegistration) {
+    return [...existingShipRecords.map((record) => ({ ...record })), ...importedShipRecords];
+  }
+
+  const importedRegistrations = new Set(
+    importedShipRecords.map((record) => normalizeRegistrationKey(record.registration)).filter(Boolean),
+  );
+  const preservedExisting = existingShipRecords.filter((record) => {
+    const registration = normalizeRegistrationKey(record.registration);
+    return !(registration && importedRegistrations.has(registration));
+  });
+
+  return [...preservedExisting.map((record) => ({ ...record })), ...importedShipRecords];
 }
 
 function StatusIcon({ name, className = '' }) {
@@ -996,9 +1024,16 @@ function SearchTopBar({ compact, query, onBack, onClear, onQueryChange, onToggle
   return (
     <header className="search-top-bar">
       <div className="search-top-bar__main">
-        <button className="search-top-bar__back" type="button" aria-label="뒤로가기" onClick={onBack}>
+        <motion.button
+          className="search-top-bar__back"
+          type="button"
+          aria-label="뒤로가기"
+          whileTap={{ scale: 0.88 }}
+          transition={MICRO_SPRING}
+          onClick={onBack}
+        >
           <img src={assets.searchBack} alt="" />
-        </button>
+        </motion.button>
         <input
           className={`search-top-bar__input ${query ? 'search-top-bar__input--filled' : ''}`}
           value={query}
@@ -1267,7 +1302,13 @@ function FilterScreen({
 
 function MenuRow({ children, detail, onClick, showArrow = false }) {
   return (
-    <button className="menu-row" type="button" onClick={onClick}>
+    <motion.button
+      className="menu-row"
+      type="button"
+      whileTap={{ scale: 0.94, backgroundColor: 'var(--slate-200)' }}
+      transition={MICRO_SPRING}
+      onClick={onClick}
+    >
       <span className="menu-row__label">{children}</span>
       {detail || showArrow ? (
         <span className="menu-row__detail-group">
@@ -1275,7 +1316,7 @@ function MenuRow({ children, detail, onClick, showArrow = false }) {
           <img className="menu-row__arrow" src={assets.menuArrowForward} alt="" />
         </span>
       ) : null}
-    </button>
+    </motion.button>
   );
 }
 
@@ -1283,9 +1324,16 @@ function SubpageTopBar({ title, onBack }) {
   return (
     <>
       <header className="detail-top-bar detail-top-bar--menu">
-        <button className="detail-back-button" type="button" aria-label="뒤로가기" onClick={onBack}>
+        <motion.button
+          className="detail-back-button"
+          type="button"
+          aria-label="뒤로가기"
+          whileTap={{ scale: 0.88 }}
+          transition={MICRO_SPRING}
+          onClick={onBack}
+        >
           <img src={assets.menuBack} alt="" />
-        </button>
+        </motion.button>
       </header>
       <h1 className="menu-screen__title menu-screen__title--subpage">{title}</h1>
     </>
@@ -1333,15 +1381,17 @@ function MenuModeScreen({ colorMode, onBack, onSelectMode }) {
 
         <div className="menu-subpage__section">
           {modeOptions.map((modeOption) => (
-            <button
+            <motion.button
               key={modeOption.value}
               className="menu-subpage__row menu-subpage__row--button"
               type="button"
+              whileTap={{ scale: 0.94, backgroundColor: 'var(--slate-200)' }}
+              transition={MICRO_SPRING}
               onClick={() => onSelectMode(modeOption.value)}
             >
               <span className="menu-subpage__label">{modeOption.label}</span>
               {colorMode === modeOption.value ? <img className="menu-subpage__check" src={assets.menuCheck} alt="" /> : null}
-            </button>
+            </motion.button>
           ))}
         </div>
       </section>
@@ -1371,11 +1421,11 @@ function MenuInfoScreen({ onBack }) {
 }
 
 function DataManagementHomeRow({ label, onClick, tone = 'default', value }) {
-  const Tag = onClick ? 'button' : 'div';
+  const Tag = onClick ? motion.button : 'div';
 
   return (
     <Tag
-      {...(onClick ? { type: 'button', onClick } : {})}
+      {...(onClick ? { type: 'button', onClick, whileTap: { scale: 0.94, backgroundColor: 'var(--slate-200)' }, transition: MICRO_SPRING } : {})}
       className={`manage-home__row ${onClick ? 'manage-home__row--button' : ''}`}
     >
       <span className="manage-home__label">{label}</span>
@@ -1391,12 +1441,17 @@ function DataManagementHomeRow({ label, onClick, tone = 'default', value }) {
 
 function DataManagementHomeScreen({
   importAlert,
+  pendingShipImport,
   onDbOpen,
-  onEditChooserOpen,
   onExport,
   onImportAlertDismiss,
   onImagesImport,
+  onPendingShipImportDismiss,
+  onPendingShipImportKeepExisting,
+  onPendingShipImportReplaceAll,
+  onPendingShipImportReplaceSameRegistrationChange,
   onMenuOpen,
+  onShipEditOpen,
   onShipImport,
   rows,
 }) {
@@ -1433,7 +1488,7 @@ function DataManagementHomeScreen({
               <DataManagementHomeRow
                 key={label}
                 label={label}
-                onClick={label === '선박 DB 편집하기' ? onEditChooserOpen : onExport}
+                onClick={label === '선박 DB 편집하기' ? onShipEditOpen : onExport}
               />
             ))}
           </div>
@@ -1472,6 +1527,15 @@ function DataManagementHomeScreen({
             onConfirm={onImportAlertDismiss}
           />
         ) : null}
+        {pendingShipImport ? (
+          <ManageShipImportModal
+            onDismiss={onPendingShipImportDismiss}
+            onKeepExisting={onPendingShipImportKeepExisting}
+            onReplaceAll={onPendingShipImportReplaceAll}
+            onReplaceSameRegistrationChange={onPendingShipImportReplaceSameRegistrationChange}
+            replaceSameRegistration={pendingShipImport.replaceSameRegistration}
+          />
+        ) : null}
       </section>
     </main>
   );
@@ -1481,9 +1545,16 @@ function ManageSubpageTopBar({ saveActive = false, saveLabel = '저장', title, 
   return (
     <>
       <header className="manage-subpage__top-bar">
-        <button className="detail-back-button" type="button" aria-label="뒤로가기" onClick={onBack}>
+        <motion.button
+          className="detail-back-button"
+          type="button"
+          aria-label="뒤로가기"
+          whileTap={{ scale: 0.88 }}
+          transition={MICRO_SPRING}
+          onClick={onBack}
+        >
           <img src={assets.manageBack} alt="" />
-        </button>
+        </motion.button>
         <div className="manage-subpage__actions">
           {onAdd ? (
             <button className="manage-subpage__add" type="button" aria-label="추가" onClick={onAdd}>
@@ -1502,28 +1573,6 @@ function ManageSubpageTopBar({ saveActive = false, saveLabel = '저장', title, 
       </header>
       <h1 className="manage-screen__title manage-screen__title--subpage">{title}</h1>
     </>
-  );
-}
-
-function DataManagementEditMenuScreen({ onBack, onShipOpen }) {
-  return (
-    <main className="app-shell">
-      <section className="phone-screen phone-screen--menu-subpage phone-screen--manage-subpage">
-        <header className="manage-subpage__top-bar manage-subpage__top-bar--simple">
-          <button className="detail-back-button" type="button" aria-label="뒤로가기" onClick={onBack}>
-            <img src={assets.manageBack} alt="" />
-          </button>
-        </header>
-
-        <h1 className="manage-screen__title manage-screen__title--subpage">선박 DB 편집하기</h1>
-
-        <div className="manage-edit-menu">
-          <button className="manage-edit-menu__row" type="button" onClick={onShipOpen}>
-            선박 DB 편집하기
-          </button>
-        </div>
-      </section>
-    </main>
   );
 }
 
@@ -1799,9 +1848,113 @@ function ManageAlertModal({
   );
 }
 
-function ManageSavedToast({ message }) {
+function ManageShipImportModal({
+  onDismiss,
+  onKeepExisting,
+  onReplaceAll,
+  onReplaceSameRegistrationChange,
+  replaceSameRegistration = true,
+}) {
   return (
-    <div className="manage-saved-toast" role="status" aria-live="polite">
+    <div className="manage-discard-modal">
+      <button className="manage-discard-modal__scrim-button" type="button" aria-label="선박 DB 불러오기 닫기" onClick={onDismiss} />
+      <div className="manage-discard-modal__card">
+        <div className="manage-ship-import-modal__content">
+          <div className="manage-ship-import-modal__header">
+            <h2 className="manage-discard-modal__title">선박 DB 불러오기</h2>
+            <p className="manage-discard-modal__copy">기존에 있던 데이터는 삭제할까요?</p>
+          </div>
+          <label className="manage-ship-import-modal__checkbox-row">
+            <input
+              className="manage-ship-import-modal__checkbox"
+              type="checkbox"
+              checked={replaceSameRegistration}
+              onChange={(event) => onReplaceSameRegistrationChange(event.target.checked)}
+            />
+            <span className={`manage-ship-import-modal__checkbox-box ${replaceSameRegistration ? 'manage-ship-import-modal__checkbox-box--checked' : ''}`}>
+              {replaceSameRegistration ? <img className="manage-ship-import-modal__checkbox-icon" src={assets.manageImportCheck} alt="" /> : null}
+            </span>
+            <span className="manage-ship-import-modal__checkbox-label">어선정보가 같은 어선은 대체하기</span>
+          </label>
+        </div>
+        <div className="manage-discard-modal__actions">
+          <button className="manage-discard-modal__button manage-ship-import-modal__button manage-ship-import-modal__button--overwrite" type="button" onClick={onReplaceAll}>
+            기존 데이터 삭제
+          </button>
+          <button className="manage-discard-modal__button manage-ship-import-modal__button manage-ship-import-modal__button--keep" type="button" onClick={onKeepExisting}>
+            기존 데이터 유지
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ManageSavedToast({ message, onDismiss }) {
+  const [dragOffset, setDragOffset] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const dragStartYRef = useRef(0);
+  const dragOffsetRef = useRef(0);
+  const dragPointerIdRef = useRef(null);
+
+  const resetDragState = () => {
+    setDragging(false);
+    setDragOffset(0);
+    dragOffsetRef.current = 0;
+    dragPointerIdRef.current = null;
+  };
+
+  const handlePointerDown = (event) => {
+    dragStartYRef.current = event.clientY;
+    dragPointerIdRef.current = event.pointerId;
+    setDragging(true);
+    setDragOffset(0);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handlePointerMove = (event) => {
+    if (!dragging || dragPointerIdRef.current !== event.pointerId) {
+      return;
+    }
+
+    const nextDragOffset = Math.max(0, event.clientY - dragStartYRef.current);
+    dragOffsetRef.current = nextDragOffset;
+    setDragOffset(nextDragOffset);
+  };
+
+  const handlePointerUp = (event) => {
+    if (dragPointerIdRef.current !== event.pointerId) {
+      return;
+    }
+
+    if (dragOffsetRef.current > 56) {
+      resetDragState();
+      onDismiss();
+      return;
+    }
+
+    resetDragState();
+  };
+
+  const handlePointerCancel = (event) => {
+    if (dragPointerIdRef.current !== event.pointerId) {
+      return;
+    }
+
+    resetDragState();
+  };
+
+  return (
+    <div
+      className={`manage-saved-toast ${dragging ? 'manage-saved-toast--dragging' : ''}`.trim()}
+      role="status"
+      aria-live="polite"
+      style={{ '--manage-saved-toast-drag-offset': `${dragOffset}px` }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
+    >
       <StatusIcon name="check_circle" className="manage-saved-toast__icon" />
       <span className="manage-saved-toast__message">{message}</span>
     </div>
@@ -1811,6 +1964,7 @@ function ManageSavedToast({ message }) {
 function DataManagementShipEditScreen({
   cards,
   dirty,
+  onDismissToast,
   originalCards,
   onAdd,
   onBack,
@@ -1862,16 +2016,115 @@ function DataManagementShipEditScreen({
 
         <ManageSearchBar value={searchQuery} onChange={onSearchChange} onClear={onSearchClear} />
 
-        {toast ? <ManageSavedToast key={toast.id} message={toast.message} /> : null}
+        {toast ? <ManageSavedToast key={toast.id} message={toast.message} onDismiss={onDismissToast} /> : null}
         {showDiscardModal ? <ManageAlertModal onCancel={onDismissDiscard} onConfirm={onConfirmDiscard} /> : null}
       </section>
     </main>
   );
 }
 
-function PersistedScreen({ active, children }) {
+// ─── Screen transition spring presets ─────────────────────────
+const PUSH_SPRING   = { type: 'spring', stiffness: 300, damping: 34, mass: 0.9 };
+const SHEET_SPRING  = { type: 'spring', stiffness: 360, damping: 32, mass: 0.85 };
+const LOGIN_SPRING  = { type: 'spring', stiffness: 300, damping: 40 };
+const MICRO_SPRING  = { type: 'spring', stiffness: 500, damping: 28 };
+const REDUCED_MOTION_TRANSITION = { duration: 0.08 };
+
+const ENTER_STATES = {
+  push:        { x: '100%', y: 0,    opacity: 1, scale: 1    },
+  pop:         { x: '-30%', y: 0,    opacity: 1, scale: 1    },
+  // iOS sheet: slide up from below, background fades behind it
+  tab:         { x: 0,      y: '58%', opacity: 1, scale: 1   },
+  // Closing sheet: returning screen fades in from slightly below (matches tab open feel)
+  tabBack:     { x: 0,      y: 8,    opacity: 0, scale: 1    },
+  loginToMain: { x: 0,      y: 0,    opacity: 0, scale: 0.96 },
+  logout:      { x: 0,      y: 0,    opacity: 0, scale: 1    },
+};
+
+const EXIT_STATES = {
+  push:        { x: '-30%', y: 0,    opacity: 1, scale: 1    },
+  pop:         { x: '100%', y: 0,    opacity: 1, scale: 1    },
+  // Background screen fades out as sheet comes up
+  tab:         { x: 0,      y: 0,    opacity: 0, scale: 1    },
+  // Closing sheet: fade out in place, no translation
+  tabBack:     { x: 0,      y: 0,    opacity: 0, scale: 1    },
+  loginToMain: { x: 0,      y: 0,    opacity: 0, scale: 1.04 },
+  logout:      { x: 0,      y: 0,    opacity: 0, scale: 1    },
+};
+
+const HIDDEN_STATE = { opacity: 0, x: 0, y: 0, scale: 1 };
+
+function getSpringForDir(dir) {
+  if (dir === 'push' || dir === 'pop') return PUSH_SPRING;
+  if (dir === 'tab' || dir === 'tabBack') return SHEET_SPRING;
+  return LOGIN_SPRING;
+}
+
+function prefersReducedMotion() {
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+}
+
+function PersistedScreen({ screenKey, currentScreen, navDir, children }) {
+  const [scope, animate] = useAnimate();
+  const isActive = screenKey === currentScreen;
+  const prevIsActiveRef = useRef(null); // null = not yet initialized
+
+  useLayoutEffect(() => {
+    const el = scope.current;
+    if (!el) return;
+
+    // ── First mount: set initial visibility without animation
+    if (prevIsActiveRef.current === null) {
+      prevIsActiveRef.current = isActive;
+      if (!isActive) animate(el, HIDDEN_STATE, { duration: 0 });
+      return;
+    }
+
+    const wasActive = prevIsActiveRef.current;
+    if (isActive === wasActive) return; // navDir changed but active state didn't
+    prevIsActiveRef.current = isActive;
+
+    // ── Reduced motion: simple fade
+    if (prefersReducedMotion()) {
+      animate(el, { opacity: isActive ? 1 : 0, x: 0, y: 0, scale: 1 }, REDUCED_MOTION_TRANSITION);
+      return;
+    }
+
+    if (isActive) {
+      // Entering screen
+      const enterState = ENTER_STATES[navDir];
+      el.style.zIndex = navDir === 'push' ? '2' : '1';
+      if (enterState) {
+        animate(el, enterState, { duration: 0 }).then(() => {
+          animate(el, { x: 0, y: 0, opacity: 1, scale: 1 }, getSpringForDir(navDir)).then(() => {
+            if (el) el.style.zIndex = '1';
+          });
+        });
+      } else {
+        animate(el, { x: 0, y: 0, opacity: 1, scale: 1 }, getSpringForDir(navDir)).then(() => {
+          if (el) el.style.zIndex = '1';
+        });
+      }
+    } else {
+      // Exiting screen
+      const exitState = EXIT_STATES[navDir] ?? HIDDEN_STATE;
+      el.style.zIndex = navDir === 'pop' ? '2' : '1';
+      animate(el, exitState, getSpringForDir(navDir)).then(() => {
+        if (el) {
+          animate(el, HIDDEN_STATE, { duration: 0 });
+          el.style.zIndex = '0';
+        }
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive, navDir]);
+
   return (
-    <div className={`screen-layer ${active ? 'screen-layer--active' : ''}`} aria-hidden={!active}>
+    <div
+      ref={scope}
+      style={{ position: 'fixed', inset: 0, overflow: 'hidden', pointerEvents: isActive ? 'auto' : 'none' }}
+      aria-hidden={!isActive}
+    >
       {children}
     </div>
   );
@@ -1879,6 +2132,7 @@ function PersistedScreen({ active, children }) {
 
 function App() {
   const [screen, setScreen] = useState('login');
+  const [navDir, setNavDir] = useState('none');
   const [compact, setCompact] = useState(false);
   const [colorMode, setColorMode] = useState('light');
   const [databaseState, setDatabaseState] = useState(() => createEmptyDatabaseState());
@@ -1889,6 +2143,7 @@ function App() {
   const [manageShipSearch, setManageShipSearch] = useState('');
   const [manageDiscardTarget, setManageDiscardTarget] = useState(null);
   const [manageImportAlert, setManageImportAlert] = useState(null);
+  const [pendingShipImport, setPendingShipImport] = useState(null);
   const [manageSaveToast, setManageSaveToast] = useState(null);
   const [topBarHidden, setTopBarHidden] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -1899,7 +2154,12 @@ function App() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [focusedField, setFocusedField] = useState('');
+  const [loginKeyboardOpen, setLoginKeyboardOpen] = useState(false);
+  const [loginViewportTop, setLoginViewportTop] = useState(0);
+  const [loginViewportHeight, setLoginViewportHeight] = useState(0);
   const mainContentRef = useRef(null);
+  const loginFieldBlurTimeoutRef = useRef(null);
+  const loginViewportBaseHeightRef = useRef(0);
   const manageSaveToastTimeoutRef = useRef(null);
   const lastScrollTopRef = useRef(0);
   const mainScrollPositionRef = useRef(0);
@@ -1910,13 +2170,37 @@ function App() {
 
   const isFilled = username.trim() !== '' && password.trim() !== '';
 
+  const navigate = (to, dir) => {
+    setNavDir(dir);
+    setScreen(to);
+  };
+
   useEffect(() => {
     const root = document.documentElement;
-    root.style.colorScheme = 'light';
-    return () => {
-      root.style.colorScheme = '';
+
+    const applyMode = (isDark) => {
+      root.style.colorScheme = isDark ? 'dark' : 'light';
+      root.classList.toggle('dark', isDark);
     };
-  }, []);
+
+    if (colorMode === 'system') {
+      const mq = window.matchMedia('(prefers-color-scheme: dark)');
+      applyMode(mq.matches);
+      const handler = (e) => applyMode(e.matches);
+      mq.addEventListener('change', handler);
+      return () => {
+        mq.removeEventListener('change', handler);
+        root.style.colorScheme = '';
+        root.classList.remove('dark');
+      };
+    } else {
+      applyMode(colorMode === 'dark');
+      return () => {
+        root.style.colorScheme = '';
+        root.classList.remove('dark');
+      };
+    }
+  }, [colorMode]);
 
   useEffect(() => {
     document.body.style.overflow = 'hidden';
@@ -1927,6 +2211,10 @@ function App() {
 
   useEffect(
     () => () => {
+      if (loginFieldBlurTimeoutRef.current) {
+        clearTimeout(loginFieldBlurTimeoutRef.current);
+      }
+
       if (manageSaveToastTimeoutRef.current) {
         clearTimeout(manageSaveToastTimeoutRef.current);
       }
@@ -1971,6 +2259,49 @@ function App() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (screen !== 'login') {
+      setLoginKeyboardOpen(false);
+      setLoginViewportTop(0);
+      setLoginViewportHeight(0);
+      loginViewportBaseHeightRef.current = 0;
+      return;
+    }
+
+    const viewport = window.visualViewport;
+
+    if (!viewport) {
+      return;
+    }
+
+    const updateKeyboardState = () => {
+      if (focusedField === '') {
+        loginViewportBaseHeightRef.current = Math.max(loginViewportBaseHeightRef.current, viewport.height);
+        setLoginKeyboardOpen(false);
+        setLoginViewportTop(0);
+        setLoginViewportHeight(0);
+        return;
+      }
+
+      const viewportBaseHeight = loginViewportBaseHeightRef.current || viewport.height;
+      const isKeyboardOpen = viewportBaseHeight - viewport.height > 80;
+
+      setLoginKeyboardOpen(isKeyboardOpen);
+      setLoginViewportTop(isKeyboardOpen ? viewport.offsetTop : 0);
+      setLoginViewportHeight(isKeyboardOpen ? viewport.height : 0);
+    };
+
+    updateKeyboardState();
+
+    viewport.addEventListener('resize', updateKeyboardState);
+    viewport.addEventListener('scroll', updateKeyboardState);
+
+    return () => {
+      viewport.removeEventListener('resize', updateKeyboardState);
+      viewport.removeEventListener('scroll', updateKeyboardState);
+    };
+  }, [focusedField, screen]);
 
   useEffect(() => {
     if (!databaseReady) {
@@ -2026,18 +2357,18 @@ function App() {
   const openSearch = () => {
     setTopBarHidden(false);
     setSearchQuery('');
-    setScreen('search');
+    navigate('search', 'push');
   };
 
   const openFilter = (mode) => {
     setTopBarHidden(false);
     setFilterMode(mode);
-    setScreen('filter');
+    navigate('filter', 'push');
   };
 
   const openMenu = () => {
     setTopBarHidden(false);
-    setScreen('menu');
+    navigate('menu', 'tab');
   };
 
   const syncShipEditor = (shipRecords) => {
@@ -2069,6 +2400,11 @@ function App() {
   };
 
   const hideManageSaveToast = () => {
+    if (manageSaveToastTimeoutRef.current) {
+      clearTimeout(manageSaveToastTimeoutRef.current);
+      manageSaveToastTimeoutRef.current = null;
+    }
+
     setManageSaveToast(null);
   };
 
@@ -2091,8 +2427,9 @@ function App() {
     resetManageShip();
     setManageDiscardTarget(null);
     setManageImportAlert(null);
+    setPendingShipImport(null);
     hideManageSaveToast();
-    setScreen('manageHome');
+    navigate('manageHome', 'tab');
   };
 
   const handleManageShipFieldChange = (cardId, field, value) => {
@@ -2194,24 +2531,61 @@ function App() {
     }
 
     setManageImportAlert(null);
+    setPendingShipImport(null);
 
     try {
       const { fileName, shipRecords } = await importShipCsvFile(file, databaseState.imageEntries);
-      const nextDatabase = cloneDatabaseState(databaseState);
 
-      nextDatabase.shipRecords = shipRecords;
-      nextDatabase.files.ship = {
-        name: fileName,
-        imported: true,
-        modified: false,
-      };
+      if (databaseState.shipRecords.length === 0) {
+        const nextDatabase = cloneDatabaseState(databaseState);
 
-      setDatabaseState(nextDatabase);
-      syncShipEditor(nextDatabase.shipRecords);
-      setHarborFilter('전체 항포구');
+        nextDatabase.shipRecords = shipRecords;
+        nextDatabase.files.ship = {
+          name: fileName,
+          imported: true,
+          modified: false,
+        };
+
+        setDatabaseState(nextDatabase);
+        syncShipEditor(nextDatabase.shipRecords);
+        setHarborFilter('전체 항포구');
+        return;
+      }
+
+      setPendingShipImport({
+        fileName,
+        shipRecords,
+        replaceSameRegistration: true,
+      });
     } catch (error) {
       showImportAlert(error, '선박 DB를 불러오지 못했어요.\n파일 형식을 확인해 주세요.');
     }
+  };
+
+  const applyPendingShipImport = ({ keepExisting }) => {
+    if (!pendingShipImport) {
+      return;
+    }
+
+    const nextDatabase = cloneDatabaseState(databaseState);
+    const nextShipRecords = mergeImportedShipRecords(nextDatabase.shipRecords, pendingShipImport.shipRecords, {
+      keepExisting,
+      replaceSameRegistration: keepExisting && pendingShipImport.replaceSameRegistration,
+    });
+
+    nextDatabase.shipRecords = applyImagesToShipRecords(nextShipRecords, nextDatabase.imageEntries, {
+      preserveExisting: true,
+    });
+    nextDatabase.files.ship = {
+      name: pendingShipImport.fileName,
+      imported: true,
+      modified: keepExisting,
+    };
+
+    setDatabaseState(nextDatabase);
+    syncShipEditor(nextDatabase.shipRecords);
+    setHarborFilter('전체 항포구');
+    setPendingShipImport(null);
   };
 
   const handleImagesImport = async (file) => {
@@ -2249,6 +2623,22 @@ function App() {
     setZoomedVessel(vessel);
   };
 
+  const handleLoginFieldFocus = (field) => {
+    if (loginFieldBlurTimeoutRef.current) {
+      clearTimeout(loginFieldBlurTimeoutRef.current);
+      loginFieldBlurTimeoutRef.current = null;
+    }
+
+    setFocusedField(field);
+  };
+
+  const handleLoginFieldBlur = () => {
+    loginFieldBlurTimeoutRef.current = window.setTimeout(() => {
+      setFocusedField('');
+      loginFieldBlurTimeoutRef.current = null;
+    }, 80);
+  };
+
   const enterMainScreen = () => {
     if (!databaseReady) {
       return;
@@ -2257,14 +2647,20 @@ function App() {
     mainScrollPositionRef.current = 0;
     lastScrollTopRef.current = 0;
     setTopBarHidden(false);
-    setScreen('main');
+    navigate('main', 'loginToMain');
   };
 
   return (
     <div className="screen-stack">
-      <PersistedScreen active={screen === 'login'}>
+      <PersistedScreen screenKey="login" currentScreen={screen} navDir={navDir}>
         <main className="app-shell app-shell--login">
-          <section className="phone-screen phone-screen--login">
+          <section
+            className={`phone-screen phone-screen--login ${loginKeyboardOpen ? 'phone-screen--login-keyboard-open' : ''}`.trim()}
+            style={{
+              '--login-viewport-top': `${loginViewportTop}px`,
+              '--login-viewport-height': `${loginViewportHeight}px`,
+            }}
+          >
             <header className="login-header">
               <h1 className="login-title">
                 <span className="login-title__accent">로그인 정보</span>를
@@ -2284,8 +2680,8 @@ function App() {
                   autoCorrect="off"
                   spellCheck={false}
                   onChange={(event) => setUsername(event.target.value)}
-                  onFocus={() => setFocusedField('username')}
-                  onBlur={() => setFocusedField('')}
+                  onFocus={() => handleLoginFieldFocus('username')}
+                  onBlur={handleLoginFieldBlur}
                 />
               </label>
 
@@ -2296,27 +2692,29 @@ function App() {
                   value={password}
                   placeholder="비밀번호"
                   onChange={(event) => setPassword(event.target.value)}
-                  onFocus={() => setFocusedField('password')}
-                  onBlur={() => setFocusedField('')}
+                  onFocus={() => handleLoginFieldFocus('password')}
+                  onBlur={handleLoginFieldBlur}
                 />
               </label>
             </form>
 
             <p className="app-version">선박DB정보체계 버전 1.0</p>
 
-            <button
+            <motion.button
               className={`login-button ${isFilled ? 'login-button--active' : ''}`}
               type="button"
               disabled={!isFilled || !databaseReady}
+              whileTap={isFilled ? { scale: 0.98 } : undefined}
+              transition={MICRO_SPRING}
               onClick={enterMainScreen}
             >
               {databaseReady ? '로그인' : '기본 데이터 불러오는 중...'}
-            </button>
+            </motion.button>
           </section>
         </main>
       </PersistedScreen>
 
-      <PersistedScreen active={screen === 'main'}>
+      <PersistedScreen screenKey="main" currentScreen={screen} navDir={navDir}>
         <main className="app-shell">
           <section className="phone-screen phone-screen--main">
             <TopBar
@@ -2357,31 +2755,38 @@ function App() {
         </main>
       </PersistedScreen>
 
-      <PersistedScreen active={screen === 'manageHome'}>
+      <PersistedScreen screenKey="manageHome" currentScreen={screen} navDir={navDir}>
         <DataManagementHomeScreen
           importAlert={manageImportAlert}
-          onDbOpen={() => setScreen('main')}
-          onEditChooserOpen={() => setScreen('manageEditMenu')}
+          pendingShipImport={pendingShipImport}
+          onDbOpen={() => {
+            setPendingShipImport(null);
+            navigate('main', 'tabBack');
+          }}
           onExport={handleExportDatabase}
           onImportAlertDismiss={() => setManageImportAlert(null)}
           onImagesImport={handleImagesImport}
-          onMenuOpen={openMenu}
+          onPendingShipImportDismiss={() => setPendingShipImport(null)}
+          onPendingShipImportKeepExisting={() => applyPendingShipImport({ keepExisting: true })}
+          onPendingShipImportReplaceAll={() => applyPendingShipImport({ keepExisting: false })}
+          onPendingShipImportReplaceSameRegistrationChange={(checked) =>
+            setPendingShipImport((current) => (current ? { ...current, replaceSameRegistration: checked } : current))
+          }
+          onMenuOpen={() => {
+            setPendingShipImport(null);
+            openMenu();
+          }}
+          onShipEditOpen={() => navigate('manageShipEdit', 'push')}
           onShipImport={handleShipImport}
           rows={manageHomePrimaryRows}
         />
       </PersistedScreen>
 
-      <PersistedScreen active={screen === 'manageEditMenu'}>
-        <DataManagementEditMenuScreen
-          onBack={() => setScreen('manageHome')}
-          onShipOpen={() => setScreen('manageShipEdit')}
-        />
-      </PersistedScreen>
-
-      <PersistedScreen active={screen === 'manageShipEdit'}>
+      <PersistedScreen screenKey="manageShipEdit" currentScreen={screen} navDir={navDir}>
         <DataManagementShipEditScreen
           cards={manageShipCardsState}
           dirty={manageShipDirty}
+          onDismissToast={hideManageSaveToast}
           originalCards={manageShipSavedState}
           onAdd={handleManageShipAdd}
           onBack={() => {
@@ -2390,12 +2795,12 @@ function App() {
               return;
             }
 
-            setScreen('manageEditMenu');
+            navigate('manageHome', 'pop');
           }}
           onConfirmDiscard={() => {
             setManageDiscardTarget(null);
             restoreManageShipSaved();
-            setScreen('manageEditMenu');
+            navigate('manageHome', 'pop');
           }}
           onDelete={handleManageShipDelete}
           onDismissDiscard={() => setManageDiscardTarget(null)}
@@ -2410,12 +2815,12 @@ function App() {
         />
       </PersistedScreen>
 
-      <PersistedScreen active={screen === 'search'}>
+      <PersistedScreen screenKey="search" currentScreen={screen} navDir={navDir}>
         <SearchScreen
           compact={compact}
           vessels={displayVessels}
           query={searchQuery}
-          onBack={() => setScreen('main')}
+          onBack={() => navigate('main', 'pop')}
           onClear={() => setSearchQuery('')}
           onImageClick={openImageZoom}
           onManageOpen={openManage}
@@ -2425,14 +2830,14 @@ function App() {
         />
       </PersistedScreen>
 
-      <PersistedScreen active={screen === 'filter'}>
+      <PersistedScreen screenKey="filter" currentScreen={screen} navDir={navDir}>
         <FilterScreen
           compact={compact}
           filterMode={filterMode}
           harborFilter={harborFilter}
           harborOptions={harborOptions}
           vessels={displayVessels}
-          onClose={() => setScreen('main')}
+          onClose={() => navigate('main', 'pop')}
           onFilterModeChange={setFilterMode}
           onHarborSelect={setHarborFilter}
           onImageClick={openImageZoom}
@@ -2446,33 +2851,33 @@ function App() {
         />
       </PersistedScreen>
 
-      <PersistedScreen active={screen === 'menu'}>
+      <PersistedScreen screenKey="menu" currentScreen={screen} navDir={navDir}>
         <MenuScreen
           colorMode={colorMode}
           compact={compact}
-          onColorModeOpen={() => setScreen('menuMode')}
-          onDbOpen={() => setScreen('main')}
-          onInfoOpen={() => setScreen('menuInfo')}
+          onColorModeOpen={() => navigate('menuMode', 'push')}
+          onDbOpen={() => navigate('main', 'tabBack')}
+          onInfoOpen={() => navigate('menuInfo', 'push')}
           onManageOpen={openManage}
           onLogout={() => {
             setUsername('');
             setPassword('');
             setFocusedField('');
-            setScreen('login');
+            navigate('login', 'logout');
           }}
         />
       </PersistedScreen>
 
-      <PersistedScreen active={screen === 'menuMode'}>
+      <PersistedScreen screenKey="menuMode" currentScreen={screen} navDir={navDir}>
         <MenuModeScreen
           colorMode={colorMode}
-          onBack={() => setScreen('menu')}
+          onBack={() => navigate('menu', 'pop')}
           onSelectMode={setColorMode}
         />
       </PersistedScreen>
 
-      <PersistedScreen active={screen === 'menuInfo'}>
-        <MenuInfoScreen onBack={() => setScreen('menu')} />
+      <PersistedScreen screenKey="menuInfo" currentScreen={screen} navDir={navDir}>
+        <MenuInfoScreen onBack={() => navigate('menu', 'pop')} />
       </PersistedScreen>
 
       <ImageZoomModal vessel={zoomedVessel} onClose={() => setZoomedVessel(null)} />
