@@ -961,6 +961,7 @@ function ManageSavedToast({ message, onDismiss }) {
 
 export function DataManagementShipEditScreen({
   cards,
+  contentRef: externalContentRef,
   dirty,
   originalCards,
   searchQuery,
@@ -983,6 +984,18 @@ export function DataManagementShipEditScreen({
   const normalizedQuery = searchQuery.trim();
   const reorderEnabled = normalizedQuery === '';
   const contentRef = useRef(null);
+  const contentRefCallback = useCallback(
+    (node) => {
+      contentRef.current = node;
+
+      if (typeof externalContentRef === 'function') {
+        externalContentRef(node);
+      } else if (externalContentRef) {
+        externalContentRef.current = node;
+      }
+    },
+    [externalContentRef],
+  );
   const itemRefs = useRef(new Map());
   const previousCardIdsRef = useRef(cards.map((card) => card.id));
   const keyboardBlurTimeoutRef = useRef(null);
@@ -1232,7 +1245,7 @@ export function DataManagementShipEditScreen({
         />
 
         {reorderEnabled ? (
-          <motion.div ref={contentRef} className="manage-edit-screen__content" layoutScroll>
+          <motion.div ref={contentRefCallback} className="manage-edit-screen__content" layoutScroll>
             <Reorder.Group
               as="div"
               axis="y"
@@ -1258,7 +1271,7 @@ export function DataManagementShipEditScreen({
             </Reorder.Group>
           </motion.div>
         ) : (
-          <div ref={contentRef} className="manage-edit-screen__content">
+          <div ref={contentRefCallback} className="manage-edit-screen__content">
             <AnimatePresence initial={false}>
               {visibleCards.map((card, index) => (
                 <motion.div

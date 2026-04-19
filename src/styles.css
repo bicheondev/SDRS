@@ -1418,9 +1418,30 @@ img {
 }
 
 [data-zoom-thumb-hidden='true'] {
-  opacity: 0 !important;
   visibility: hidden !important;
   pointer-events: none !important;
+}
+
+.status-bar-scroll-top-tap {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 40%;
+  height: env(safe-area-inset-top, 0px);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  appearance: none;
+  cursor: default;
+  z-index: 30;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.status-bar-scroll-top-tap:focus,
+.status-bar-scroll-top-tap:focus-visible {
+  outline: none;
 }
 
 .filter-screen__results {
