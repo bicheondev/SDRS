@@ -3,7 +3,6 @@ import { motion } from 'framer-motion';
 export function AuthScreen({
   focusedField,
   isFilled,
-  keyboardOpen,
   onFieldBlur,
   onFieldFocus,
   onPasswordChange,
@@ -11,18 +10,10 @@ export function AuthScreen({
   onUsernameChange,
   password,
   username,
-  viewportHeight,
-  viewportTop,
 }) {
   return (
     <main className="app-shell app-shell--login">
-      <section
-        className={`phone-screen phone-screen--login ${keyboardOpen ? 'phone-screen--login-keyboard-open' : ''}`.trim()}
-        style={{
-          '--login-viewport-top': `${viewportTop}px`,
-          '--login-viewport-height': `${viewportHeight}px`,
-        }}
-      >
+      <section className="phone-screen phone-screen--login">
         <header className="login-header">
           <h1 className="login-title">
             <span className="login-title__accent">로그인 정보</span>를

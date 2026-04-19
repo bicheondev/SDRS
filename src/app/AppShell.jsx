@@ -87,7 +87,6 @@ export function AppShell() {
         <AuthScreen
           focusedField={loginViewport.focusedField}
           isFilled={isFilled}
-          keyboardOpen={loginViewport.keyboardOpen}
           onFieldBlur={loginViewport.handleFieldBlur}
           onFieldFocus={loginViewport.handleFieldFocus}
           onPasswordChange={setPassword}
@@ -95,8 +94,6 @@ export function AppShell() {
           onUsernameChange={setUsername}
           password={password}
           username={username}
-          viewportHeight={loginViewport.viewportHeight}
-          viewportTop={loginViewport.viewportTop}
         />
       </AnimatedScreen>
 
