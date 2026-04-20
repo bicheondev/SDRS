@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export function useLoginViewport({ enabled }) {
   const [focusedField, setFocusedField] = useState('');
@@ -19,21 +19,21 @@ export function useLoginViewport({ enabled }) {
     }
   }, [enabled]);
 
-  const handleFieldFocus = (field) => {
+  const handleFieldFocus = useCallback((field) => {
     if (blurTimeoutRef.current) {
       clearTimeout(blurTimeoutRef.current);
       blurTimeoutRef.current = null;
     }
 
     setFocusedField(field);
-  };
+  }, []);
 
-  const handleFieldBlur = () => {
+  const handleFieldBlur = useCallback(() => {
     blurTimeoutRef.current = window.setTimeout(() => {
       setFocusedField('');
       blurTimeoutRef.current = null;
     }, 80);
-  };
+  }, []);
 
   return {
     focusedField,

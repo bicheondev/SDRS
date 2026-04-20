@@ -7,7 +7,6 @@ import { useColorMode } from '../hooks/useColorMode.js';
 import { useStackNavigation } from '../hooks/useStackNavigation.js';
 import AnimatedScreen from '../components/layout/AnimatedScreen.jsx';
 import BottomTab from '../components/layout/BottomTab.jsx';
-import StatusBarTopTap from '../components/layout/StatusBarTopTap.jsx';
 import { appReducer, initialAppState } from './appReducer.js';
 import { useAppBootstrap } from './useAppBootstrap.js';
 
@@ -209,38 +208,6 @@ export default function MainAppShell({ isActive, onLogout, reducedMotion }) {
     (appState.activeTab === 'menu' && menuNavigation.currentScreen === 'menu');
   const bottomTabCompact = appState.activeTab === 'manage' ? false : databasePage.compact;
 
-  const isDbMain = appState.activeTab === 'db';
-  const isShipEdit =
-    appState.activeTab === 'manage' && manageNavigation.currentScreen === 'manageShipEdit';
-  const anyOverlayOpen =
-    Boolean(appState.zoomSession) ||
-    Boolean(databasePage.filterSheet) ||
-    Boolean(shipEditor.manageDiscardTarget);
-  const showStatusBarTopTap = (isDbMain || isShipEdit) && !anyOverlayOpen;
-
-  const handleStatusBarTopTap = useCallback(() => {
-    const scrollTarget = isDbMain
-      ? databasePage.mainContentRef.current
-      : isShipEdit
-        ? shipEditContentRef.current
-        : null;
-
-    if (!(scrollTarget instanceof HTMLElement)) {
-      return;
-    }
-
-    if (scrollTarget.scrollTop <= 0) {
-      return;
-    }
-
-    if (reducedMotion || typeof scrollTarget.scrollTo !== 'function') {
-      scrollTarget.scrollTop = 0;
-      return;
-    }
-
-    scrollTarget.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [databasePage.mainContentRef, isDbMain, isShipEdit, reducedMotion]);
-
   return (
     <>
       <div className="tab-stack">
@@ -439,8 +406,6 @@ export default function MainAppShell({ isActive, onLogout, reducedMotion }) {
           />
         </Suspense>
       ) : null}
-
-      {showStatusBarTopTap ? <StatusBarTopTap onTap={handleStatusBarTopTap} /> : null}
     </>
   );
 }

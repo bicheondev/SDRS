@@ -127,7 +127,9 @@ export function FilterScreen({
         labelWidthAnimationFrameRef.current = null;
       }
 
-      setHarborColumnWidth(nextHarborWidth);
+      if (isPresent) {
+        setHarborColumnWidth(nextHarborWidth);
+      }
 
       if (reducedMotion || !isPresent) {
         setHarborLabelWidth(nextHarborWidth);
