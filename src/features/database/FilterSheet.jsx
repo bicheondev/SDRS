@@ -83,6 +83,7 @@ export function FilterScreen({
   const labelWidthAnimationFrameRef = useRef(null);
   const [harborLabelWidth, setHarborLabelWidth] = useState(0);
   const [vesselTypeLabelWidth, setVesselTypeLabelWidth] = useState(0);
+  const [harborColumnWidth, setHarborColumnWidth] = useState(0);
   const [columnLayout, setColumnLayout] = useState({
     top: FILTER_COLUMN_TOP,
     harborLeft: FILTER_COLUMN_EDGE,
@@ -125,6 +126,8 @@ export function FilterScreen({
         window.cancelAnimationFrame(labelWidthAnimationFrameRef.current);
         labelWidthAnimationFrameRef.current = null;
       }
+
+      setHarborColumnWidth(nextHarborWidth);
 
       if (reducedMotion || !isPresent) {
         setHarborLabelWidth(nextHarborWidth);
@@ -171,7 +174,7 @@ export function FilterScreen({
         top: FILTER_COLUMN_TOP,
         harborLeft,
         vesselTypeLeft:
-          harborLeft + harborLabelWidth + disclosureWidth + FILTER_BUTTON_GAP,
+          harborLeft + harborColumnWidth + disclosureWidth + FILTER_BUTTON_GAP,
       });
     };
 
@@ -179,7 +182,7 @@ export function FilterScreen({
     window.addEventListener('resize', updateColumnLayout);
 
     return () => window.removeEventListener('resize', updateColumnLayout);
-  }, [compact, filterMode, harborFilter, harborLabelWidth, vesselTypeFilter, vesselTypeLabelWidth]);
+  }, [compact, filterMode, harborColumnWidth, harborFilter, vesselTypeFilter]);
 
   const filteredVessels = useMemo(
     () => applySearchQuery(filterVessels(vessels, harborFilter, vesselTypeFilter), query),

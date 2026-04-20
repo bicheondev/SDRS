@@ -1475,7 +1475,6 @@ img {
   gap: 24px;
   width: auto;
   pointer-events: auto;
-  transition: left var(--motion-duration-normal) var(--motion-ease-standard);
 }
 
 .filter-screen__option {
