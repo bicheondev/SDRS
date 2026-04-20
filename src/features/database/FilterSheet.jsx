@@ -193,6 +193,7 @@ export function FilterScreen({
   const layerMotion = getSheetOverlayMotion(reducedMotion);
   const panelMotion = getSheetPanelMotion(reducedMotion);
   const visualFilterMode = isPresent ? filterMode : 'closed';
+  const filterScrollResetKey = `${harborFilter}:${vesselTypeFilter}`;
 
   return (
     <motion.main className="app-shell filter-screen-layer" {...layerMotion}>
@@ -223,6 +224,7 @@ export function FilterScreen({
             compact={compact}
             vessels={filteredVessels}
             onImageClick={onImageClick}
+            scrollResetKey={filterScrollResetKey}
           />
         </div>
 

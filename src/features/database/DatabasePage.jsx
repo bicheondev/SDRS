@@ -34,6 +34,8 @@ export const DatabasePage = memo(function DatabasePage({
   topBarHidden,
   vesselTypeFilter,
 }) {
+  const filterScrollResetKey = `${harborFilter}:${vesselTypeFilter}`;
+
   return (
     <main className="app-shell">
       <section
@@ -73,6 +75,7 @@ export const DatabasePage = memo(function DatabasePage({
           onImageClick={onImageClick}
           onScroll={databaseView === 'browse' ? onMainScroll : undefined}
           ref={databaseView === 'browse' ? mainContentRef : undefined}
+          scrollResetKey={filterScrollResetKey}
           vessels={databaseView === 'search' ? searchedDisplayVessels : filteredDisplayVessels}
         />
       </section>

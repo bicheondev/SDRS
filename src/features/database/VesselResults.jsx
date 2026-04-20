@@ -1,5 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { forwardRef, memo, useCallback } from 'react';
+import { forwardRef, memo, useCallback, useLayoutEffect, useRef } from 'react';
 
 import { getPressMotion, motionTokens } from '../../motion.js';
 import { AppIcon } from '../../components/Icons.jsx';
@@ -203,20 +203,49 @@ export function VesselEmptyState() {
 }
 
 export const VesselResults = forwardRef(function VesselResults(
-  { className = 'main-content', compact, vessels, onImageClick, ...contentProps },
+  {
+    className = 'main-content',
+    compact,
+    vessels,
+    onImageClick,
+    scrollResetKey,
+    ...contentProps
+  },
   ref,
 ) {
   const reducedMotion = useReducedMotion() ?? false;
   const viewModeMotion = getViewModeMotion(reducedMotion);
+  const contentRef = useRef(null);
   const handleImageClick = useCallback(
     (selectedVessel, sourceThumbnail) => {
       onImageClick(selectedVessel, vessels, sourceThumbnail);
     },
     [onImageClick, vessels],
   );
+  const setContentRef = useCallback(
+    (node) => {
+      contentRef.current = node;
+
+      if (typeof ref === 'function') {
+        ref(node);
+        return;
+      }
+
+      if (ref) {
+        ref.current = node;
+      }
+    },
+    [ref],
+  );
+
+  useLayoutEffect(() => {
+    if (contentRef.current) {
+      contentRef.current.scrollTop = 0;
+    }
+  }, [scrollResetKey]);
 
   return (
-    <div className={className} ref={ref} {...contentProps}>
+    <div className={className} ref={setContentRef} {...contentProps}>
       <AnimatePresence initial={false} mode="wait">
         <motion.div
           key={compact ? 'compact' : 'card'}

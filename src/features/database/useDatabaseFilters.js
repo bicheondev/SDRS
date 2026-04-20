@@ -18,8 +18,8 @@ export function useDatabaseFilters({ activeTab, isAppVisible, shipRecords }) {
   const [topBarHidden, setTopBarHidden] = useState(false);
   const [databaseView, setDatabaseView] = useState('browse');
   const [searchQuery, setSearchQuery] = useState('');
-  const [harborFilter, setHarborFilter] = useState('전체 항포구');
-  const [vesselTypeFilter, setVesselTypeFilter] = useState('전체 선박');
+  const [harborFilter, setHarborFilterState] = useState('전체 항포구');
+  const [vesselTypeFilter, setVesselTypeFilterState] = useState('전체 선박');
   const [filterSheet, setFilterSheet] = useState(null);
   const mainContentRef = useRef(null);
   const lastScrollTopRef = useRef(0);
@@ -46,7 +46,7 @@ export function useDatabaseFilters({ activeTab, isAppVisible, shipRecords }) {
       return;
     }
 
-    setHarborFilter('전체 항포구');
+    setHarborFilterState('전체 항포구');
   }, [harborFilter, harborOptions]);
 
   useEffect(() => {
@@ -150,6 +150,44 @@ export function useDatabaseFilters({ activeTab, isAppVisible, shipRecords }) {
       lastScrollTopRef.current = currentScrollTop;
     },
     [activeTab, databaseView],
+  );
+
+  const resetMainScrollPosition = useCallback(() => {
+    mainScrollPositionRef.current = 0;
+    lastScrollTopRef.current = 0;
+    scrollHideDistanceRef.current = 0;
+    scrollShowDistanceRef.current = 0;
+    topBarHiddenRef.current = false;
+    revealLockScrollTopRef.current = 0;
+    setTopBarHidden(false);
+
+    if (mainContentRef.current) {
+      mainContentRef.current.scrollTop = 0;
+    }
+  }, []);
+
+  const setHarborFilter = useCallback(
+    (nextHarborFilter) => {
+      if (harborFilter === nextHarborFilter) {
+        return;
+      }
+
+      resetMainScrollPosition();
+      setHarborFilterState(nextHarborFilter);
+    },
+    [harborFilter, resetMainScrollPosition],
+  );
+
+  const setVesselTypeFilter = useCallback(
+    (nextVesselTypeFilter) => {
+      if (vesselTypeFilter === nextVesselTypeFilter) {
+        return;
+      }
+
+      resetMainScrollPosition();
+      setVesselTypeFilterState(nextVesselTypeFilter);
+    },
+    [resetMainScrollPosition, vesselTypeFilter],
   );
 
   const resetDatabasePage = useCallback(() => {
