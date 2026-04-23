@@ -1,4 +1,5 @@
 dist/
+dist-rnw/
 coverage/
 node_modules/
 package-lock.json
